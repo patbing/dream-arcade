@@ -1,0 +1,26 @@
+<!doctype html><html><head><title>good</title></head><body style="margin:0;background:#000">
+<canvas id="c" width="480" height="270"></canvas>
+<script>
+// A dodge game: arrows move the ship, rocks fall, each hit costs a life, every rock dodged scores.
+const c = document.getElementById('c'), g = c.getContext('2d');
+let x = 240, lives = 3, score = 0, over = false, rocks = [], keys = {}, last = performance.now(), spawn = 0;
+addEventListener('keydown', e => { keys[e.key] = true; });
+addEventListener('keyup', e => { keys[e.key] = false; });
+function loop(t) {
+  const dt = Math.min(50, t - last) / 1000; last = t;
+  if (!over) {
+    if (keys.ArrowLeft) x -= 220 * dt; if (keys.ArrowRight) x += 220 * dt; x = Math.max(10, Math.min(470, x));
+    spawn -= dt; if (spawn <= 0) { rocks.push({ x: Math.random() * 480, y: -10, v: 80 + Math.random() * 80 }); spawn = 0.5; }
+    rocks.forEach(r => r.y += r.v * dt);
+    rocks = rocks.filter(r => { if (r.y > 250 && Math.abs(r.x - x) < 18) { lives--; return false; } if (r.y > 280) { score++; return false; } return true; });
+    if (lives <= 0) over = true;
+  }
+  g.fillStyle = '#000'; g.fillRect(0, 0, 480, 270);
+  g.fillStyle = '#ccc'; rocks.forEach(r => g.fillRect(r.x - 8, r.y - 8, 16, 16));
+  g.fillStyle = '#4f4'; g.fillRect(x - 12, 250, 24, 14);
+  g.fillStyle = '#fff'; g.fillText('score ' + score + '  lives ' + lives + (over ? '  GAME OVER' : ''), 8, 14);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.__play = { controls: [{ key: 'ArrowLeft', does: 'move left' }, { key: 'ArrowRight', does: 'move right' }], state: () => ({ score, lives, over, won: false }) };
+</script></body></html>

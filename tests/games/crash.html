@@ -1,0 +1,7 @@
+<!doctype html><html><head><title>crash</title></head><body><canvas id="c" width="480" height="270"></canvas>
+<script>
+const g = document.getElementById('c').getContext('2d'); let t0 = 0;
+function loop(t) { g.fillStyle = 'hsl(' + (t / 10 % 360) + ',60%,50%)'; g.fillRect(0, 0, 480, 270); if (t > 3000) player.jump(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+window.__play = { controls: [{ key: 'z', does: 'fire' }], state: () => ({ score: 0, lives: 1, over: false }) };
+</script></body></html>

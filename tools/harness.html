@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>harness check</title>
+<pre id="out">running…</pre>
+<script src="../js/judge.js"></script>
+<script src="../js/harness.js"></script>
+<script>
+(async () => {
+  const out = {}, t0 = performance.now();
+  for (const g of ['good', 'deadkey', 'liar', 'crash']) {
+    const html = await (await fetch('../tests/games/' + g + '.html')).text();
+    const r = await DA.harness.playtest(html, 12345);
+    out[g] = { playable: r.verdict.playable, passed: r.verdict.passed + '/' + r.verdict.of,
+      checks: r.verdict.checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.id + (c.detail ? ' — ' + c.detail : '')), keys: r.verdict.keys };
+  }
+  out.ms = Math.round(performance.now() - t0);
+  document.getElementById('out').textContent = JSON.stringify(out, null, 1);
+  window.__done = out;
+})();
+</script>

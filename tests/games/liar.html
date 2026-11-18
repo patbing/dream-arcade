@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>liar</title></head><body>
+<canvas id="c" width="480" height="270"></canvas>
+<script>
+const g = document.getElementById('c').getContext('2d'); let n = 0;
+g.fillStyle = '#123'; g.fillRect(0, 0, 480, 270);
+setInterval(() => { n++; }, 100);
+window.__play = { controls: [{ key: ' ', does: 'jump' }], state: () => ({ score: n, lives: 3 - Math.floor(n / 100), over: n > 300, won: false }) };
+</script></body></html>
