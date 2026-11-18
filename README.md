@@ -25,13 +25,15 @@ This follows the post the quest links, where the uncle had the model write a bot
 
 A pilot of five dreams on two free models ([docs/pilot.md](docs/pilot.md)): `openai/gpt-6.1-terra` wrote a game in 31 to 43 s for about 0.02 Pollen and all of its games passed the bot. `deepseek/deepseek-v4.1-flash` took 2 to 4.5 minutes and three of five requests ended without a game.
 
+The default model is free-tier. https://gen.pollinations.ai/v1/models/openai%2Fgpt-6.1-terra returns that one model's entry (about 1 KB) with `"paid_only": false`. The page checks the live model list before every request and will not send to a missing or paid-only model.
+
 ## Safety
 
 Generated games are untrusted code. They run in an `<iframe sandbox="allow-scripts">` (an opaque origin: no access to this page, its storage or your key) with a Content-Security-Policy that blocks all network, put in front of the game's own markup. On-screen buttons reach the game only through `postMessage` with a per-frame token. A game that sends its frame to another page is stopped. Downloaded games keep the same no-network policy. The bot's report comes from code running beside the game, so a game written on purpose to fool the bot could; the page says so for shared games.
 
 ## Run it
 
-Static files, no build. Serve the folder and open it. Sign in with Pollinations Connect to make a game; you pay with your own Pollen and the default model is free-tier. The page will not send a request that could push one visit past 0.5 Pollen (`CAP` in `js/config.js`). Tests: `npm test`. `tools/harness.html` runs the bot on four handwritten games (working, dead key, a frozen screen that lies about its state, a crash).
+Static files, no build. Serve the folder and open it. Sign in with Pollinations Connect to make a game; you pay with your own Pollen and the default model is free-tier. The page will not send a request that could push one visit past 0.5 Pollen (`CAP` in `js/config.js`). Tests: `npm test`. `tools/harness.html` runs the bot on five handwritten games (working, dead key, a frozen screen that lies about its state, a crash, and one that tries to leave its frame).
 
 ## Files
 
