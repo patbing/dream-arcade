@@ -20,7 +20,7 @@
 
   // One chat call. Resolves to { ok, text, usage, ms } or { ok: false, error }; never rejects.
   function chat(key, model, messages, maxTokens, signal) {
-    if (signal && signal.aborted) return Promise.resolve({ ok: false, error: 'cancelled', cancelled: true });
+    if (signal && signal.aborted) return Promise.resolve({ ok: false, error: 'cancelled', cancelled: true, notSent: true });
     var ctrl = new AbortController(), timedOut = false, t0 = Date.now();
     var timer = setTimeout(function () { timedOut = true; ctrl.abort(); }, C.TIMEOUT_MS);
     function stop() { ctrl.abort(); }

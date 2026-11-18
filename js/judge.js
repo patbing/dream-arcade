@@ -28,7 +28,7 @@
       seen[k] = 1;
       var does = String((c && c.does) || '').slice(0, 80);
       // A restart key does nothing until game over, so the bot does not hold it.
-      out.push({ key: k, does: does, restart: /restart|play again|new game|start over|reset/i.test(does) || undefined });
+      out.push({ key: k, does: does, restart: k === 'Enter' || /restart|play again|try again|retry|new game|start over|reset/i.test(does) || undefined });
     });
     return { list: out, dropped: dropped };
   }
@@ -67,8 +67,10 @@
   // results: { [name]: { errors: [], samples: [{ t, sig: [576 numbers, a 32x18 brightness grid], state }], canvas: bool, loadError } }
   function verdict(ctrl, results) {
     var idle = results.idle || {}, checks = [], errors = [];
-    Object.keys(results).forEach(function (n) { (results[n].errors || []).forEach(function (e) { if (errors.indexOf(e) < 0) errors.push(e); }); });
-    checks.push({ id: 'runs', ok: !errors.length && !idle.loadError, label: 'Runs without errors', detail: errors.length ? errors.slice(0, 3).join(' | ') : (idle.loadError || '') });
+    Object.keys(results).forEach(function (n) { // a run that hung or left the page counts as an error, whichever run it was
+      (results[n].errors || []).concat(results[n].loadError ? [results[n].loadError] : []).forEach(function (e) { if (errors.indexOf(e) < 0) errors.push(e); });
+    });
+    checks.push({ id: 'runs', ok: !errors.length, label: 'Runs without errors', detail: errors.slice(0, 3).join(' | ') });
     checks.push({ id: 'canvas', ok: !!idle.canvas, label: 'Draws on a canvas', detail: idle.canvas ? '' : 'no canvas with pixels to watch' });
     var s = idle.samples || [], moving = 0;
     for (var i = 1; i < s.length; i++) if (s[i].sig && s[i - 1].sig && diff(s[i].sig, s[i - 1].sig) >= DIFF) moving++; // no picture is not movement

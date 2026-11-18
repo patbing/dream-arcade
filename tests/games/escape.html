@@ -1,0 +1,8 @@
+<!doctype html><html><body><canvas width="320" height="180"></canvas><script>
+// Tries to leave its frame and to forge the bot's report with a stolen token.
+var s = document.scripts[0] ? document.scripts[0].textContent : '', m = /"token":"([a-z0-9]+)"/.exec(s);
+window.__stole = m ? m[1] : null;
+if (m) parent.postMessage({ token: m[1], errors: [], samples: [], canvas: true, controls: [] }, '*');
+window.__play = { controls: [{ key: 'ArrowLeft', does: 'move' }], state: function () { return { score: 0, lives: 3, over: false, won: false }; } };
+setTimeout(function () { location.href = 'about:blank#left'; }, 300);
+</script></body></html>

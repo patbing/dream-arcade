@@ -85,3 +85,14 @@ test('regressions: lists checks and keys that passed before and fail after', () 
   assert.deepEqual(J.regressions(before, after), ['Every declared key changes the screen', 'key ArrowLeft']);
   assert.deepEqual(J.regressions(after, before), []);
 });
+
+test('verdict: a run that hangs or leaves the page fails "runs", even if it is not the idle run', () => {
+  const idle = idleRun(240), ctrl = [{ key: 'ArrowLeft', does: 'move' }];
+  const v = J.verdict(ctrl, { idle, 'key:ArrowLeft': keyRun(idle, 40), monkey: { loadError: 'stuck in a loop?', errors: [] } });
+  assert.equal(v.playable, false);
+  assert.match(v.checks.find(c => c.id === 'runs').detail, /stuck/);
+});
+
+test('controls: Enter is always treated as restart', () => {
+  assert.equal(J.controls([{ key: 'Enter', does: 'try again' }]).list[0].restart, true);
+});

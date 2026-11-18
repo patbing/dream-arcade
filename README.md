@@ -15,7 +15,7 @@ Live: https://patbing.github.io/dream-arcade/ · Built for Pollinations quest #2
 3. A bot plays it before you do, in a sandboxed frame with no network, on a fake clock with a fixed seed: one minute with no keys, each declared key held for 1.5 s, then 30 s of random keys. It compares a 32×18 brightness picture of the canvas between runs, so a key that changes nothing on screen is a dead key, whatever the game says about itself.
 4. If the bot finds a crash, no canvas or a dead key, its findings go back to the model once for a repair. The report shows both versions.
 5. You play it with the keyboard or with on-screen buttons on a phone. Ask for a change ("make the lava slower"); the bot plays the new version and flags anything that worked before and broke, with Undo.
-6. Share: the whole game is compressed into the link (nothing is stored on a server), or download it as one `.html` file.
+6. Share: the whole game is compressed into the link (nothing is stored on a server), or download it as one `.html` file. A link is about 5,000 characters, too long for a Discord message; send it as a file or through a link shortener. A shared game only runs after the visitor clicks.
 
 Before sign-in, five recorded games replay real model replies, and the bot plays each one in your browser when you open it.
 
@@ -27,7 +27,7 @@ A pilot of five dreams on two free models ([docs/pilot.md](docs/pilot.md)): `ope
 
 ## Safety
 
-Generated games are untrusted code. They run in an `<iframe sandbox="allow-scripts">` (an opaque origin: no access to this page, its storage or your key) with a Content-Security-Policy that blocks all network, put in front of the game's own markup. On-screen buttons reach the game only through `postMessage` with a per-frame token. Downloaded games keep the same no-network policy.
+Generated games are untrusted code. They run in an `<iframe sandbox="allow-scripts">` (an opaque origin: no access to this page, its storage or your key) with a Content-Security-Policy that blocks all network, put in front of the game's own markup. On-screen buttons reach the game only through `postMessage` with a per-frame token. A game that sends its frame to another page is stopped. Downloaded games keep the same no-network policy. The bot's report comes from code running beside the game, so a game written on purpose to fool the bot could; the page says so for shared games.
 
 ## Run it
 

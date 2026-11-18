@@ -34,7 +34,7 @@ button:disabled, input:disabled { cursor: default; opacity: .5; }
 
 main { max-width: 980px; margin: 0 auto; padding: 12px 20px 24px; }
 .facts { margin: 0; color: var(--muted); font-size: 13px; }
-.notice { min-height: 1.2em; margin: 6px 0; color: var(--muted); font-size: 14px; }
+.notice { min-height: 1.2em; margin: 6px 0; color: var(--muted); font-size: 14px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0; } /* progress stays in view on a phone */
 .hint { color: var(--muted); font-size: 14px; }
 .warn { color: var(--no); }
 .fine { color: var(--muted); font-size: 12.5px; }
@@ -87,7 +87,7 @@ textarea { resize: vertical; }
 .stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; margin: 8px 0; }
 .gameframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .pad { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
-.key { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; font-size: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.key { display: inline-flex; flex-direction: column; align-items: center; min-width: 64px; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 12px; font-size: 12px; touch-action: none; user-select: none; -webkit-user-select: none; }
 .key.on { background: var(--accent); color: var(--accent-ink); }
 .report { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
 .report h4 { margin: 8px 0 4px; font-size: 15px; }
@@ -101,3 +101,6 @@ textarea { resize: vertical; }
 .mono { font-family: var(--mono); }
 .change { margin: 12px 0; }
 .change .btn { margin-top: 6px; }
+.key b { font-size: 20px; line-height: 1.1; }
+.stopped { color: var(--no); padding: 12px; }
+.gameframe { background: #000; }

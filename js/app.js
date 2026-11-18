@@ -24,6 +24,7 @@
     return (Math.ceil(chars / 3) + 200) * p.pin + C.MAX_OUT * p.pout;
   }
   function charge(res, w) { // a failed call may still be billed: without usage, count the worst case
+    if (res && res.notSent) return 0; // cancelled before it left the page
     var p = price(), u = res && res.usage;
     return p && u && u.prompt_tokens != null ? u.prompt_tokens * p.pin + (u.completion_tokens || 0) * p.pout : w;
   }
@@ -74,7 +75,9 @@
     var stage = h('div', 'stage'); box.appendChild(stage);
     var player = box._player = H.play(stage, g.html);
     box.appendChild(h('p', 'fine', 'Click the game, then use the keys. The buttons send the same keys (hold them on a phone).'));
-    box.appendChild(pad(v.controls || [], player));
+    var keys = (v.controls || []).slice();
+    if (!keys.some(function (c) { return c.key === 'Enter'; })) keys.push({ key: 'Enter', does: 'restart after game over' }); // the contract's restart key
+    box.appendChild(pad(keys, player));
 
     box.appendChild(report(g));
     var acts = h('div', 'controls');
@@ -87,11 +90,13 @@
     if (g.live) box.appendChild(changeBox(g));
   }
 
+  var GLYPH = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' };
   function pad(controls, player) {
     var wrap = h('div', 'pad');
     controls.forEach(function (c) {
-      var b = h('button', 'key', J.keyName(c.key) + ' · ' + c.does);
-      b.type = 'button';
+      var b = h('button', 'key'), does = c.does.length > 22 ? c.does.slice(0, 21) + '…' : c.does;
+      b.appendChild(h('b', null, GLYPH[c.key] || J.keyName(c.key))); b.appendChild(h('span', null, does));
+      b.type = 'button'; b.title = J.keyName(c.key) + ': ' + c.does;
       function down(e) { e.preventDefault(); player.press('keydown', c.key); b.classList.add('on'); }
       function up() { if (b.classList.contains('on')) player.press('keyup', c.key); b.classList.remove('on'); }
       b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up);
@@ -174,9 +179,12 @@
     var lab = h('label', 'field', 'Ask for a change (like "make the lava slower" or "add a rainbow cupcake worth 5 points")');
     var inp = h('input'); inp.type = 'text'; inp.maxLength = D.CHANGE_MAX; inp.className = 'textin';
     lab.appendChild(inp);
-    var b = h('button', 'btn primary', 'Change it'); b.type = 'submit';
+    var b = h('button', 'btn primary', 'Change it'); b.type = 'button';
     f.appendChild(lab); f.appendChild(b);
-    f.addEventListener('submit', trusted(function (e) { e.preventDefault(); change(g, inp.value.trim()); }));
+    // Spending only on a real click or a real Enter: a script's form.submit() or button.click() is ignored.
+    f.addEventListener('submit', function (e) { e.preventDefault(); });
+    b.addEventListener('click', trusted(function () { change(g, inp.value.trim()); }));
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.isTrusted) { e.preventDefault(); change(g, inp.value.trim()); } });
     return f;
   }
   function change(g, request) {
@@ -231,17 +239,29 @@
     a.download = 'dream-game.html'; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
+  // A shared game does not run until the visitor asks: it is someone else's code.
   function openShared() {
     var m = /^#g=([A-Za-z0-9_-]+)$/.exec(location.hash);
     if (!m || typeof DecompressionStream === 'undefined') return;
     unpack(m[1]).then(function (o) {
       if (!o || typeof o.h !== 'string' || o.h.length > 400000) throw new Error('not a game link');
-      $('shared').hidden = false;
-      return playtest(o.h).then(function (pt) {
-        show($('sharedresult'), { title: 'A shared game', dream: String(o.d || '').slice(0, D.DREAM_MAX), html: o.h, versions: [{ label: 'Shared', verdict: pt.verdict }],
-          note: 'Someone made this and shared the link. It runs sandboxed with no network, and the bot just checked it in your browser.' });
-        say('');
-      });
+      var box = $('sharedresult'), dream = String(o.d || '').slice(0, D.DREAM_MAX);
+      if (box._player) box._player.remove();
+      box.textContent = ''; $('shared').hidden = false;
+      if (dream) box.appendChild(h('p', 'dream', '“' + dream + '”'));
+      var go = h('button', 'btn primary', 'Let the bot play it, then play');
+      box.appendChild(go);
+      box.appendChild(h('p', 'fine', 'Someone made this game and put it in the link. It runs in a sandbox with no access to this page or your key.'));
+      go.addEventListener('click', trusted(function () {
+        if (app.busy) return;
+        go.disabled = true; begin();
+        playtest(o.h).then(function (pt) {
+          show(box, { title: 'A shared game', dream: dream, html: o.h, versions: [{ label: 'Shared', verdict: pt.verdict }],
+            note: 'The bot played it in your browser just now. Its report comes from code running beside the game, so a game written to fool the bot could; treat a shared game like any download.' });
+          say('');
+        }).catch(fail).then(end);
+      }));
+      $('shared').scrollIntoView();
     }).catch(function (e) { say('That share link could not be opened: ' + (e && e.message || e), true); });
   }
 
@@ -304,6 +324,7 @@
     N.prices().then(function (p) { app.prices = p; paint(); }).catch(function (e) { say('Model list unavailable: ' + e.message, true); });
     loadRecordings();
     openShared();
+    window.addEventListener('hashchange', openShared);
     paint();
   }
   init();

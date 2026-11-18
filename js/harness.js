@@ -9,18 +9,21 @@
   // Runs inside the game frame before the game. With a plan it fakes the clock (60 s of play in about a second) and
   // presses keys; without one it only reports errors so the visitor can play normally.
   function prelude(cfg) {
-    var errors = [], token = cfg.token;
+    // Taken before any game code runs: the game cannot read the token from this script or swap these out.
+    var me = document.currentScript; if (me) me.remove();
+    var P = window.parent, errors = [], token = cfg.token;
+    var DRAW = CanvasRenderingContext2D.prototype.drawImage, READ = CanvasRenderingContext2D.prototype.getImageData, ALL = Document.prototype.querySelectorAll;
     function report(msg) { var m = String(msg || 'error').slice(0, 160); if (errors.length < 20) errors.push(m); }
     window.addEventListener('error', function (e) { report(e.message); });
     window.addEventListener('unhandledrejection', function (e) { report('unhandled promise: ' + (e.reason && e.reason.message || e.reason)); });
     if (!cfg.plan) { // the visitor plays: on-screen buttons in the page send keys here, only from the parent and with the token
       window.addEventListener('message', function (e) {
         var d = e.data;
-        if (e.source !== parent || !d || d.token !== token || (d.type !== 'keydown' && d.type !== 'keyup') || typeof d.key !== 'string') return;
+        if (e.source !== P || !d || d.token !== token || (d.type !== 'keydown' && d.type !== 'keyup') || typeof d.key !== 'string') return;
         var t = document.activeElement || document.body || document.documentElement;
         t.dispatchEvent(new KeyboardEvent(d.type, { key: d.key, code: String(d.code || ''), bubbles: true, cancelable: true }));
       });
-      setTimeout(function () { parent.postMessage({ token: token, errors: errors, ready: true }, '*'); }, 1500);
+      setTimeout(function () { P.postMessage({ token: token, errors: errors, ready: true }, '*'); }, 1500);
       return;
     }
     // A fixed window size: a hidden or offscreen frame reports 0x0, and the same seed must draw the same frames anywhere.
@@ -54,14 +57,14 @@
     var sg = small.getContext('2d', { willReadFrequently: true });
     function bigCanvas() {
       var best = null, area = 0;
-      [].forEach.call(document.querySelectorAll('canvas'), function (c) { var a = c.width * c.height; if (a > area) { area = a; best = c; } });
+      [].forEach.call(ALL.call(document, 'canvas'), function (c) { var a = c.width * c.height; if (a > area) { area = a; best = c; } });
       return best;
     }
     function sig() {
       var c = bigCanvas(); if (!c || !c.width || !c.height) return null;
       try {
-        sg.clearRect(0, 0, 32, 18); sg.drawImage(c, 0, 0, 32, 18);
-        var d = sg.getImageData(0, 0, 32, 18).data, out = [];
+        sg.clearRect(0, 0, 32, 18); DRAW.call(sg, c, 0, 0, 32, 18);
+        var d = READ.call(sg, 0, 0, 32, 18).data, out = [];
         for (var i = 0; i < d.length; i += 4) out.push(Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]));
         return out;
       } catch (e) { report('canvas unreadable: ' + e.message); return null; }
@@ -83,14 +86,18 @@
     function run() {
       var plan = cfg.plan, ev = plan.events.slice(), samples = [], step = 1000 / 60, t = 0, nextSample = 0;
       guard(function () { window.dispatchEvent(new Event('resize')); });
-      while (t <= plan.ms) {
-        while (ev.length && ev[0].t <= t) { var e = ev.shift(); press(e.type === 'down' ? 'keydown' : 'keyup', e.key, e.code); }
-        if (t >= nextSample) { samples.push({ t: nextSample, sig: sig(), state: state() }); nextSample += nextSample < cfg.fineUntil ? cfg.fineMs : cfg.sampleMs; } // fine samples while a key is held: a punch can last 0.2 s
-        t += step; tick(t);
-      }
-      var p = window.__play, ctrl = null;
-      try { ctrl = p && Array.isArray(p.controls) ? p.controls.map(function (c) { return { key: String(c && c.key || ''), does: String(c && c.does || '') }; }) : null; } catch (e) { report('controls: ' + e.message); }
-      parent.postMessage({ token: token, errors: errors, samples: samples, canvas: !!bigCanvas(), controls: ctrl }, '*');
+      // In slices of 300 frames, so a slow phone keeps the page responsive and the parent's time limit can fire.
+      (function slice() {
+        for (var n = 0; n < 300 && t <= plan.ms; n++) {
+          while (ev.length && ev[0].t <= t) { var e = ev.shift(); press(e.type === 'down' ? 'keydown' : 'keyup', e.key, e.code); }
+          if (t >= nextSample) { samples.push({ t: nextSample, sig: sig(), state: state() }); nextSample += nextSample < cfg.fineUntil ? cfg.fineMs : cfg.sampleMs; } // fine samples while a key is held: a punch can last 0.2 s
+          t += step; tick(t);
+        }
+        if (t <= plan.ms) return setTimeoutReal(slice, 0);
+        var p = window.__play, ctrl = null;
+        try { ctrl = p && Array.isArray(p.controls) ? p.controls.map(function (c) { return { key: String(c && c.key || ''), does: String(c && c.does || '') }; }) : null; } catch (e) { report('controls: ' + e.message); }
+        P.postMessage({ token: token, errors: errors, samples: samples, canvas: !!bigCanvas(), controls: ctrl }, '*');
+      })();
     }
     window.addEventListener('load', function () { setTimeoutReal(run, 0); });
     var setTimeoutReal = window.__realSetTimeout;
@@ -116,11 +123,23 @@
     f.setAttribute('title', 'The game');
     f.className = 'gameframe';
     f.srcdoc = srcdoc(gameHtml, { token: token, plan: null });
-    box.appendChild(f);
+    var loads = 0;
+    f.addEventListener('load', function () { // a second load means the game sent its frame to another page
+      if (++loads < 2) return;
+      f.remove(); var m = document.createElement('p'); m.className = 'stopped';
+      m.textContent = 'The game tried to open another page, so it was stopped.'; box.appendChild(m);
+    });
+    // On a narrow screen the game draws at 640x360, like the bot saw it, and is scaled down to fit.
+    function fit() {
+      var w = box.clientWidth, s = f.style;
+      if (w && w < 640) { s.width = '640px'; s.height = '360px'; s.transform = 'scale(' + (w / 640) + ')'; s.transformOrigin = '0 0'; }
+      else { s.width = s.height = s.transform = ''; }
+    }
+    box.appendChild(f); fit(); window.addEventListener('resize', fit);
     return {
       frame: f,
       press: function (type, key) { if (f.contentWindow) f.contentWindow.postMessage({ token: token, type: type, key: key, code: root.DA.judge.code(key) }, '*'); },
-      remove: function () { f.remove(); }
+      remove: function () { window.removeEventListener('resize', fit); f.remove(); }
     };
   }
 
@@ -137,7 +156,9 @@
         if (e.source !== f.contentWindow || !e.data || e.data.token !== token) return;
         finish(clean(e.data));
       }
-      var timer = setTimeout(function () { finish({ loadError: 'the game did not finish ' + plan.name + ' within ' + Math.round((timeoutMs || 20000) / 1000) + ' s (stuck in a loop?)', errors: [] }); }, timeoutMs || 20000);
+      var limit = timeoutMs || 60000, loads = 0;
+      var timer = setTimeout(function () { finish({ loadError: 'the game did not finish ' + plan.name + ' within ' + Math.round(limit / 1000) + ' s (stuck in a loop?)', errors: [] }); }, limit);
+      f.addEventListener('load', function () { if (++loads > 1) finish({ loadError: 'the game sent its frame to another page', errors: [] }); });
       window.addEventListener('message', onMsg);
       f.srcdoc = srcdoc(gameHtml, { token: token, seed: seed, sampleMs: root.DA.judge.SAMPLE_MS, fineMs: root.DA.judge.FINE_MS, fineUntil: root.DA.judge.KEY_AT + root.DA.judge.KEY_HOLD + 500, plan: { ms: plan.ms, events: events } });
       document.body.appendChild(f);
