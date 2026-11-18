@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rooftop Rumble</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #10101d; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = 1000, H = 600, FLOOR = 495;
+  const keys = Object.create(null);
+  const used = ["w", "a", "d", "f", "ArrowLeft", "ArrowRight", "ArrowUp", "l"];
+  let fighters, over, winner, phase, phaseTime, particles, flash, lastTime, clock;
+
+  function fighter(x, color, light, controls) {
+    return {
+      x, y: FLOOR, vy: 0, vx: 0, health: 100, kos: 0,
+      color, light, controls, attack: 0, cooldown: 0,
+      hitDone: false, hurt: 0, walking: false, facing: 1
+    };
+  }
+
+  function reset() {
+    fighters = [
+      fighter(300, "#ec535c", "#ffb5a8", {left:"a", right:"d", jump:"w", punch:"f"}),
+      fighter(700, "#4c9df4", "#b4dfff", {left:"ArrowLeft", right:"ArrowRight", jump:"ArrowUp", punch:"l"})
+    ];
+    over = false;
+    winner = -1;
+    phase = "fight";
+    phaseTime = 0;
+    particles = [];
+    flash = 0;
+    clock = 0;
+    for (const key of Object.keys(keys)) keys[key] = false;
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+  }
+  window.addEventListener("resize", resize);
+  window.addEventListener("keydown", e => {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    if (e.key === "Enter" && over) { reset(); return; }
+    if (used.includes(e.key)) keys[e.key] = true;
+  });
+  window.addEventListener("keyup", e => {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    if (used.includes(e.key)) keys[e.key] = false;
+  });
+
+  window.__play = {
+    controls: [
+      {key:"a", does:"player one moves left"},
+      {key:"d", does:"player one moves right"},
+      {key:"w", does:"player one jumps"},
+      {key:"f", does:"player one punches"},
+      {key:"ArrowLeft", does:"player two moves left"},
+      {key:"ArrowRight", does:"player two moves right"},
+      {key:"ArrowUp", does:"player two jumps"},
+      {key:"l", does:"player two punches"}
+    ],
+    state() {
+      return {score: fighters[0].kos, lives: 3 - fighters[1].kos, over, won: over && winner === 0};
+    }
+  };
+
+  function burst(x, y, color) {
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const speed = 50 + Math.random() * 210;
+      particles.push({x, y, vx:Math.cos(a)*speed, vy:Math.sin(a)*speed,
+        life:0.25 + Math.random()*0.3, max:0.55, color});
+    }
+  }
+
+  function update(dt) {
+    clock += dt;
+    flash = Math.max(0, flash - dt);
+    particles = particles.filter(p => p.life > 0);
+    for (const p of particles) {
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vy += 350 * dt; p.life -= dt;
+    }
+    if (over) return;
+    if (phase === "ko") {
+      phaseTime -= dt;
+      if (phaseTime <= 0) {
+        if (fighters[0].kos >= 3 || fighters[1].kos >= 3) {
+          winner = fighters[0].kos >= 3 ? 0 : 1;
+          over = true;
+        } else {
+          fighters.forEach((f, i) => {
+            f.x = i === 0 ? 300 : 700;
+            f.y = FLOOR; f.vy = 0; f.vx = 0;
+            f.health = 100; f.attack = 0; f.cooldown = 0; f.hurt = 0;
+          });
+          phase = "fight";
+        }
+      }
+      return;
+    }
+
+    for (let i = 0; i < 2; i++) {
+      const f = fighters[i], opponent = fighters[1-i];
+      f.facing = opponent.x >= f.x ? 1 : -1;
+      f.hurt = Math.max(0, f.hurt - dt);
+      f.cooldown = Math.max(0, f.cooldown - dt);
+      const dir = (keys[f.controls.right] ? 1 : 0) - (keys[f.controls.left] ? 1 : 0);
+      f.walking = dir !== 0;
+      f.x += (dir * 205 + f.vx) * dt;
+      f.vx *= Math.pow(0.015, dt);
+      if (keys[f.controls.jump] && f.y >= FLOOR) f.vy = -480;
+      f.vy += 1150 * dt;
+      f.y = Math.min(FLOOR, f.y + f.vy * dt);
+      if (f.y === FLOOR && f.vy > 0) f.vy = 0;
+      f.x = Math.max(65, Math.min(935, f.x));
+
+      if (keys[f.controls.punch] && f.cooldown <= 0) {
+        f.attack = 0.3; f.cooldown = 0.4; f.hitDone = false;
+      }
+      if (f.attack > 0) {
+        f.attack -= dt;
+        if (!f.hitDone && f.attack <= 0.21) {
+          f.hitDone = true;
+          const dx = opponent.x - f.x;
+          if (Math.abs(dx) < 98 && Math.abs(opponent.y - f.y) < 85 && dx * f.facing > 0) {
+            opponent.health = Math.max(0, opponent.health - 20);
+            opponent.hurt = 0.22;
+            opponent.vx = f.facing * 220;
+            burst(opponent.x - f.facing * 20, opponent.y - 92, f.light);
+            flash = 0.08;
+          }
+        }
+      }
+    }
+
+    const a = fighters[0], b = fighters[1];
+    if (Math.abs(a.x - b.x) < 55 && Math.abs(a.y - b.y) < 70) {
+      const mid = (a.x + b.x) / 2, side = a.x <= b.x ? 1 : -1;
+      a.x = Math.max(55, Math.min(945, mid - 28 * side));
+      b.x = Math.max(55, Math.min(945, mid + 28 * side));
+    }
+    if (a.health <= 0 || b.health <= 0) {
+      const roundWinner = a.health <= 0 ? 1 : 0;
+      fighters[roundWinner].kos++;
+      phase = "ko"; phaseTime = 1.5;
+      burst(fighters[1-roundWinner].x, fighters[1-roundWinner].y - 90, "#fff0a8");
+    }
+  }
+
+  function rect(x,y,w,h,color) {
+    ctx.fillStyle = color; ctx.fillRect(x,y,w,h);
+  }
+  function text(str,x,y,size,color,align="left",weight="bold") {
+    ctx.fillStyle=color; ctx.font=`${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign=align; ctx.textBaseline="middle"; ctx.fillText(str,x,y);
+  }
+  function roundRect(x,y,w,h,r,color) {
+    ctx.fillStyle=color; ctx.beginPath(); ctx.roundRect(x,y,w,h,r); ctx.fill();
+  }
+
+  function drawBackground() {
+    const sky = ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0,"#16162e"); sky.addColorStop(0.65,"#50324c"); sky.addColorStop(1,"#d07563");
+    rect(0,0,W,H,sky);
+    ctx.fillStyle="#f8b488"; ctx.beginPath(); ctx.arc(500,300,102,0,Math.PI*2); ctx.fill();
+    for (let i=0; i<3; i++) rect(395, 275+i*27, 210, 5, "rgba(83,47,69,.45)");
+    for (let i=0; i<18; i++) {
+      const x=i*63-10, h=85+(i*47%115);
+      rect(x, FLOOR-h, 55,h, i%2 ? "#22243a" : "#29263b");
+      for (let y=FLOOR-h+14; y<FLOOR-15; y+=23)
+        for (let xx=x+9; xx<x+48; xx+=16)
+          if ((i+Math.floor(y/23)+Math.floor(xx/16))%3===0) rect(xx,y,5,8,"#d69878");
+    }
+    rect(0, FLOOR-7, W, 14, "#171b29");
+    rect(0, FLOOR+7, W, H-FLOOR, "#292d3c");
+    rect(0, FLOOR+7, W, 8, "#666078");
+    for (let i=0; i<12; i++) {
+      ctx.strokeStyle="#3c4051"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(i*120-80,FLOOR+15); ctx.lineTo(i*120-130,H); ctx.stroke();
+    }
+    rect(0, H-22, W, 22, "#1b1e2d");
+  }
+
+  function drawFighter(f) {
+    const s = f.facing;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.fillStyle="rgba(0,0,0,.28)";
+    ctx.beginPath(); ctx.ellipse(0,3,34,9,0,0,Math.PI*2); ctx.fill();
+    ctx.scale(s,1);
+    const airborne = f.y < FLOOR-2;
+    const stride = f.walking && !airborne ? Math.sin(clock*13)*13 : 0;
+    const bob = f.walking && !airborne ? Math.abs(Math.sin(clock*13))*3 : 0;
+    ctx.translate(0,-bob);
+    ctx.lineCap="round";
+    ctx.lineWidth=15; ctx.strokeStyle="#202638";
+    ctx.beginPath(); ctx.moveTo(-12,-44); ctx.lineTo(-16-stride,-10); ctx.lineTo(-20-stride,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(12,-44); ctx.lineTo(14+stride,-10); ctx.lineTo(20+stride,0); ctx.stroke();
+    ctx.strokeStyle="#f4e9d8"; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(-24-stride,0); ctx.lineTo(-12-stride,0);
+    ctx.moveTo(14+stride,0); ctx.lineTo(27+stride,0); ctx.stroke();
+    roundRect(-24,-105,48,64,12,f.hurt > 0 ? "#ffffff" : f.color);
+    rect(-22,-57,44,8,"#f2ddbf");
+    ctx.fillStyle=f.light;
+    ctx.beginPath(); ctx.arc(0,-124,21,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#242131";
+    ctx.beginPath(); ctx.arc(-2,-132,20,Math.PI,Math.PI*2); ctx.fill();
+    rect(11,-126,5,4,"#232132");
+    ctx.strokeStyle=f.light; ctx.lineWidth=13; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(-17,-91); ctx.lineTo(-27,-75); ctx.lineTo(-12,-80); ctx.stroke();
+    const punch = f.attack > 0 && f.attack < 0.23;
+    ctx.beginPath(); ctx.moveTo(17,-91);
+    ctx.lineTo(punch ? 53 : 26, punch ? -96 : -80); ctx.stroke();
+    ctx.fillStyle=f.color;
+    ctx.beginPath(); ctx.arc(punch ? 58 : 29,punch ? -97 : -81,11,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="#fff4de"; ctx.lineWidth=2; ctx.stroke();
+    if (punch) {
+      ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(42,-113); ctx.lineTo(64,-113); ctx.moveTo(48,-119); ctx.lineTo(61,-119); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    const a=fighters[0], b=fighters[1];
+    text("PLAYER 1",45,40,17,"#ffb9aa");
+    text("PLAYER 2",955,40,17,"#b9ddff","right");
+    text("SCORE: "+a.kos,45,66,13,"#fff1d9");
+    text("LIVES: "+(3-b.kos),955,66,13,"#fff1d9","right");
+    roundRect(45,82,360,25,7,"#171827");
+    roundRect(595,82,360,25,7,"#171827");
+    const aw=350*a.health/100, bw=350*b.health/100;
+    if (aw>0) roundRect(50,87,aw,15,4,a.health<30?"#ffcf66":"#f3696e");
+    if (bw>0) roundRect(950-bw,87,bw,15,4,b.health<30?"#ffcf66":"#6ab4ff");
+    text("KNOCKOUTS",500,29,11,"#d9c6c2","center");
+    text(a.kos+"  :  "+b.kos,500,61,31,"#fff3d9","center");
+    for(let i=0;i<3;i++) {
+      ctx.beginPath(); ctx.arc(67+i*19,125,5,0,Math.PI*2);
+      ctx.fillStyle=i<a.kos?"#ffb16e":"#4d4655"; ctx.fill();
+      ctx.beginPath(); ctx.arc(933-i*19,125,5,0,Math.PI*2);
+      ctx.fillStyle=i<b.kos?"#ffb16e":"#4d4655"; ctx.fill();
+    }
+    text("FIRST TO 3 KNOCKOUTS WINS",500,102,11,"#f4d7c2","center");
+    text("P1: A / D MOVE · W JUMP · F PUNCH     |     P2: ← / → MOVE · ↑ JUMP · L PUNCH",
+      500,575,13,"#e8dbe0","center");
+  }
+
+  function draw() {
+    const scale=Math.min(canvas.width/W,canvas.height/H);
+    const ox=(canvas.width-W*scale)/2, oy=(canvas.height-H*scale)/2;
+    ctx.setTransform(1,0,0,1,0,0);
+    rect(0,0,canvas.width,canvas.height,"#10101d");
+    ctx.setTransform(scale,0,0,scale,ox,oy);
+    drawBackground();
+    fighters.slice().sort((a,b)=>a.y-b.y).forEach(drawFighter);
+    for(const p of particles) {
+      ctx.globalAlpha=Math.max(0,p.life/p.max);
+      rect(p.x,p.y,5,5,p.color);
+    }
+    ctx.globalAlpha=1;
+    if(flash>0) rect(0,0,W,H,"rgba(255,255,255,.07)");
+    drawHUD();
+    if(phase==="ko" && !over) {
+      text("KNOCKOUT!",500,220,58,"#211b29","center");
+      text("KNOCKOUT!",497,216,58,"#ffe5a3","center");
+      text("PLAYER "+(fighters[0].health<=0?2:1)+" TAKES THE ROUND",500,257,16,"#fff","center");
+    }
+    if(over) {
+      rect(0,0,W,H,"rgba(13,13,25,.78)");
+      text("MATCH OVER",500,204,17,"#e9c8aa","center");
+      text("PLAYER "+(winner+1)+" WINS!",500,260,58,winner===0?"#ff9790":"#91c7ff","center");
+      text(fighters[0].kos+"  —  "+fighters[1].kos,500,320,35,"#fff1d9","center");
+      text("PRESS ENTER TO PLAY AGAIN",500,380,17,"#fff","center");
+    }
+  }
+
+  function frame(t) {
+    if(lastTime === undefined) lastTime=t;
+    const dt=Math.min((t-lastTime)/1000,0.04);
+    lastTime=t;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  resize(); reset(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

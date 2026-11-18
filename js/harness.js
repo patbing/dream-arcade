@@ -17,6 +17,11 @@
       setTimeout(function () { parent.postMessage({ token: token, errors: errors, ready: true }, '*'); }, 1500);
       return;
     }
+    // A fixed window size: a hidden or offscreen frame reports 0x0, and the same seed must draw the same frames anywhere.
+    // shortcut: games that size from element.clientWidth still see 0 when hidden; fix if a real game does that.
+    [['innerWidth', 640], ['innerHeight', 360], ['devicePixelRatio', 1]].forEach(function (p) {
+      try { Object.defineProperty(window, p[0], { get: function () { return p[1]; }, configurable: true }); } catch (e) {}
+    });
     var seed = cfg.seed >>> 0;
     Math.random = function () { seed = (seed + 0x6D2B79F5) >>> 0; var t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     var now = 0, nextId = 1, timers = [], frames = [], BASE = 1767225600000;
@@ -39,7 +44,7 @@
       var fs = frames; frames = [];
       fs.forEach(function (f) { guard(f.cb, [now]); });
     }
-    var small = document.createElement('canvas'); small.width = 16; small.height = 9;
+    var small = document.createElement('canvas'); small.width = 32; small.height = 18;
     var sg = small.getContext('2d', { willReadFrequently: true });
     function bigCanvas() {
       var best = null, area = 0;
@@ -49,8 +54,8 @@
     function sig() {
       var c = bigCanvas(); if (!c || !c.width || !c.height) return null;
       try {
-        sg.clearRect(0, 0, 16, 9); sg.drawImage(c, 0, 0, 16, 9);
-        var d = sg.getImageData(0, 0, 16, 9).data, out = [];
+        sg.clearRect(0, 0, 32, 18); sg.drawImage(c, 0, 0, 32, 18);
+        var d = sg.getImageData(0, 0, 32, 18).data, out = [];
         for (var i = 0; i < d.length; i += 4) out.push(Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]));
         return out;
       } catch (e) { report('canvas unreadable: ' + e.message); return null; }
@@ -71,9 +76,10 @@
     }
     function run() {
       var plan = cfg.plan, ev = plan.events.slice(), samples = [], step = 1000 / 60, t = 0, nextSample = 0;
+      guard(function () { window.dispatchEvent(new Event('resize')); });
       while (t <= plan.ms) {
         while (ev.length && ev[0].t <= t) { var e = ev.shift(); press(e.type === 'down' ? 'keydown' : 'keyup', e.key, e.code); }
-        if (t >= nextSample) { samples.push({ t: nextSample, sig: sig(), state: state() }); nextSample += cfg.sampleMs; }
+        if (t >= nextSample) { samples.push({ t: nextSample, sig: sig(), state: state() }); nextSample += nextSample < cfg.fineUntil ? cfg.fineMs : cfg.sampleMs; } // fine samples while a key is held: a punch can last 0.2 s
         t += step; tick(t);
       }
       var p = window.__play, ctrl = null;
@@ -108,7 +114,7 @@
       }
       var timer = setTimeout(function () { finish({ loadError: 'the game did not finish ' + plan.name + ' within ' + Math.round((timeoutMs || 20000) / 1000) + ' s (stuck in a loop?)', errors: [] }); }, timeoutMs || 20000);
       window.addEventListener('message', onMsg);
-      f.srcdoc = srcdoc(gameHtml, { token: token, seed: seed, sampleMs: root.DA.judge.SAMPLE_MS, plan: { ms: plan.ms, events: events } });
+      f.srcdoc = srcdoc(gameHtml, { token: token, seed: seed, sampleMs: root.DA.judge.SAMPLE_MS, fineMs: root.DA.judge.FINE_MS, fineUntil: root.DA.judge.KEY_AT + root.DA.judge.KEY_HOLD + 500, plan: { ms: plan.ms, events: events } });
       document.body.appendChild(f);
     });
   }
@@ -116,8 +122,8 @@
   // Only numbers and short strings cross back from the game frame.
   function clean(d) {
     var out = { errors: (Array.isArray(d.errors) ? d.errors : []).slice(0, 20).map(function (x) { return String(x).slice(0, 160); }), canvas: d.canvas === true, samples: [] };
-    (Array.isArray(d.samples) ? d.samples : []).slice(0, 400).forEach(function (s) {
-      var sig = Array.isArray(s.sig) && s.sig.length === 144 ? s.sig.map(function (v) { return Math.max(0, Math.min(255, +v || 0)); }) : null;
+    (Array.isArray(d.samples) ? d.samples : []).slice(0, 600).forEach(function (s) {
+      var sig = Array.isArray(s.sig) && s.sig.length === 576 ? s.sig.map(function (v) { return Math.max(0, Math.min(255, +v || 0)); }) : null;
       var st = null;
       if (s.state && typeof s.state === 'object') { st = {}; ['score', 'lives', 'level'].forEach(function (k) { if (typeof s.state[k] === 'number' && isFinite(s.state[k])) st[k] = s.state[k]; }); ['over', 'won'].forEach(function (k) { if (typeof s.state[k] === 'boolean') st[k] = s.state[k]; }); }
       out.samples.push({ t: +s.t || 0, sig: sig, state: st });

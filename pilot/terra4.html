@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rexy and the Runaway Cupcakes</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #274e39; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = 960, H = 600;
+  const keys = {};
+  const controls = [
+    { key: "ArrowLeft", does: "move left" },
+    { key: "ArrowRight", does: "move right" },
+    { key: "ArrowUp", does: "move up" },
+    { key: "ArrowDown", does: "move down" },
+    { key: "Enter", does: "roar, or restart after game over" }
+  ];
+
+  let score, lives, over, player, cupcakes, lava, spawnTimer, time, lastTime;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  function newCupcake() {
+    let x, y;
+    do {
+      x = rand(70, 890);
+      y = rand(270, 535);
+    } while (Math.hypot(x - player.x, y - player.y) < 160);
+    return { x, y, angle: rand(0, Math.PI * 2), turn: rand(0.5, 2), phase: rand(0, 6), color: Math.random() < 0.5 ? "#ff95b4" : "#cf9bf1" };
+  }
+
+  function reset() {
+    score = 0;
+    lives = 3;
+    over = false;
+    time = 0;
+    player = { x: 250, y: 410, facing: 1, invuln: 0, ouch: 0 };
+    cupcakes = Array.from({ length: 5 }, newCupcake);
+    lava = [];
+    spawnTimer = 1.2;
+    lastTime = null;
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * dpr);
+    canvas.height = Math.round(innerHeight * dpr);
+  }
+  window.addEventListener("resize", resize);
+  window.addEventListener("keydown", e => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) e.preventDefault();
+    if (e.key === "Enter" && over && !e.repeat) reset();
+    keys[e.key] = true;
+  });
+  window.addEventListener("keyup", e => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) e.preventDefault();
+    keys[e.key] = false;
+  });
+  window.addEventListener("blur", () => {
+    for (const key in keys) keys[key] = false;
+  });
+
+  window.__play = {
+    controls,
+    state() { return { score, lives, over, won: false }; }
+  };
+
+  function update(dt) {
+    if (over) return;
+    time += dt;
+    player.invuln = Math.max(0, player.invuln - dt);
+    player.ouch = Math.max(0, player.ouch - dt);
+
+    let dx = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+    let dy = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
+    const len = Math.hypot(dx, dy);
+    if (len) {
+      player.x = clamp(player.x + dx / len * 170 * dt, 35, W - 35);
+      player.y = clamp(player.y + dy / len * 170 * dt, 245, H - 38);
+      if (dx) player.facing = Math.sign(dx);
+    }
+
+    for (let i = 0; i < cupcakes.length; i++) {
+      const c = cupcakes[i];
+      const awayX = c.x - player.x, awayY = c.y - player.y;
+      const distance = Math.hypot(awayX, awayY);
+      let vx, vy, speed;
+      if (distance < 205) {
+        vx = awayX / (distance || 1);
+        vy = awayY / (distance || 1);
+        speed = 102;
+      } else {
+        c.turn -= dt;
+        if (c.turn <= 0) {
+          c.angle += rand(-1.5, 1.5);
+          c.turn = rand(0.7, 2);
+        }
+        vx = Math.cos(c.angle);
+        vy = Math.sin(c.angle);
+        speed = 34;
+      }
+      c.x += vx * speed * dt;
+      c.y += vy * speed * dt;
+      if (c.x < 28 || c.x > W - 28) c.angle = Math.PI - c.angle;
+      if (c.y < 245 || c.y > H - 28) c.angle = -c.angle;
+      c.x = clamp(c.x, 28, W - 28);
+      c.y = clamp(c.y, 245, H - 28);
+      if (Math.hypot(c.x - player.x, c.y - player.y) < 32) {
+        score += 10;
+        cupcakes[i] = newCupcake();
+      }
+    }
+
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnTimer = Math.max(0.65, 1.45 - score / 600);
+      const angle = Math.atan2(player.y - 148, player.x - 790) + rand(-0.09, 0.09);
+      const speed = rand(175, 205);
+      lava.push({ x: 790, y: 148, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, age: 0 });
+    }
+    for (let i = lava.length - 1; i >= 0; i--) {
+      const l = lava[i];
+      l.x += l.vx * dt;
+      l.y += l.vy * dt;
+      l.age += dt;
+      if (player.invuln <= 0 && Math.hypot(l.x - player.x, l.y - player.y) < 27) {
+        lava.splice(i, 1);
+        lives--;
+        player.invuln = 1.3;
+        player.ouch = 1.1;
+        if (lives <= 0) over = true;
+      } else if (l.x < -40 || l.x > W + 40 || l.y < -40 || l.y > H + 40 || l.age > 8) {
+        lava.splice(i, 1);
+      }
+    }
+  }
+
+  function ellipse(x, y, rx, ry, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function rounded(x, y, w, h, r, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  }
+  function text(str, x, y, size, color, align = "left", weight = "bold") {
+    ctx.fillStyle = color;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(str, x, y);
+  }
+  function heart(x, y, filled) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.bezierCurveTo(-25, -5, -13, -19, 0, -9);
+    ctx.bezierCurveTo(13, -19, 25, -5, 0, 8);
+    ctx.fillStyle = filled ? "#ff5b68" : "#8b9c85";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function background() {
+    ctx.fillStyle = "#bdeaf0";
+    ctx.fillRect(0, 0, W, H);
+    ellipse(130, 150, 90, 25, "#d8f5ed");
+    ellipse(170, 140, 45, 29, "#d8f5ed");
+    ellipse(470, 120, 80, 20, "#d8f5ed");
+    ellipse(440, 111, 39, 25, "#d8f5ed");
+
+    ctx.fillStyle = "#91cf9b";
+    ctx.beginPath();
+    ctx.moveTo(0, 285);
+    ctx.quadraticCurveTo(150, 185, 300, 280);
+    ctx.quadraticCurveTo(470, 190, 650, 285);
+    ctx.lineTo(960, 310); ctx.lineTo(960, 600); ctx.lineTo(0, 600);
+    ctx.fill();
+
+    // Volcano and its fiery crater.
+    ctx.fillStyle = "#685a54";
+    ctx.beginPath();
+    ctx.moveTo(645, 300); ctx.lineTo(752, 160); ctx.lineTo(825, 160); ctx.lineTo(925, 300);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#8b6c5c";
+    ctx.beginPath();
+    ctx.moveTo(710, 300); ctx.lineTo(773, 169); ctx.lineTo(810, 169); ctx.lineTo(870, 300);
+    ctx.closePath(); ctx.fill();
+    ellipse(790, 160, 39, 12, "#493a37");
+    ellipse(790, 158, 27, 7, "#ff6b35");
+    ctx.strokeStyle = "#ff9b49"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(773, 165); ctx.lineTo(765, 190); ctx.lineTo(756, 196); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(803, 165); ctx.lineTo(811, 185); ctx.stroke();
+    ellipse(782, 137, 11, 6, "rgba(125,119,108,.45)");
+    ellipse(800, 121, 16, 8, "rgba(125,119,108,.3)");
+
+    ctx.fillStyle = "#79bf76";
+    ctx.beginPath();
+    ctx.moveTo(0, 300); ctx.quadraticCurveTo(260, 280, 480, 303);
+    ctx.quadraticCurveTo(700, 315, 960, 290); ctx.lineTo(960, 600); ctx.lineTo(0, 600);
+    ctx.fill();
+
+    for (let i = 0; i < 25; i++) {
+      const x = (i * 137 + 38) % 960, y = 325 + (i * 83 % 250);
+      ctx.strokeStyle = "rgba(54,139,75,.32)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x, y - 6); ctx.lineTo(x + 2, y); ctx.lineTo(x + 6, y - 4); ctx.stroke();
+    }
+  }
+
+  function drawCupcake(c) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    const step = Math.sin(time * 13 + c.phase) * 4;
+    ellipse(0, 15, 18, 5, "rgba(35,75,40,.18)");
+    ctx.strokeStyle = "#694b43"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-6, 9); ctx.lineTo(-9 - step, 16);
+    ctx.moveTo(6, 9); ctx.lineTo(9 + step, 16);
+    ctx.stroke();
+    ctx.fillStyle = "#e8b75e";
+    ctx.beginPath();
+    ctx.moveTo(-14, -3); ctx.lineTo(14, -3); ctx.lineTo(10, 11); ctx.lineTo(-10, 11);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#c88b43"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-4, 9); ctx.moveTo(3, 0); ctx.lineTo(4, 9); ctx.stroke();
+    ellipse(0, -5, 17, 9, c.color);
+    ellipse(-6, -10, 8, 7, c.color);
+    ellipse(5, -11, 9, 8, c.color);
+    ellipse(0, -18, 3, 3, "#e95361");
+    ellipse(-5, -5, 1.7, 2, "#4b3b3b");
+    ellipse(5, -5, 1.7, 2, "#4b3b3b");
+    ctx.restore();
+  }
+
+  function drawLava(l) {
+    ctx.save();
+    ctx.translate(l.x, l.y);
+    ctx.rotate(Math.atan2(l.vy, l.vx));
+    ctx.fillStyle = "rgba(255,123,38,.32)";
+    ctx.beginPath(); ctx.moveTo(-28, 0); ctx.lineTo(2, -13); ctx.lineTo(2, 13); ctx.closePath(); ctx.fill();
+    ellipse(0, 0, 13, 13, "#e84f28");
+    ellipse(2, -2, 8, 8, "#ff9d32");
+    ellipse(4, -4, 3, 3, "#ffe377");
+    ctx.restore();
+  }
+
+  function drawRexy() {
+    const p = player;
+    if (p.invuln > 0 && Math.floor(p.invuln * 10) % 2 === 0) ctx.globalAlpha = 0.55;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(p.facing, 1);
+    const walking = keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown;
+    const step = walking ? Math.sin(time * 14) * 4 : 0;
+    ellipse(0, 22, 36, 8, "rgba(35,75,40,.22)");
+    // Tail, back spikes, body, legs, and big friendly head.
+    ctx.fillStyle = "#3b9c62";
+    ctx.beginPath(); ctx.moveTo(-17, -3); ctx.lineTo(-47, -18); ctx.lineTo(-31, 11); ctx.lineTo(-15, 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#2e7654";
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-23 + i * 10, -12); ctx.lineTo(-19 + i * 10, -23); ctx.lineTo(-13 + i * 10, -12); ctx.fill();
+    }
+    rounded(-19, 5, 13, 20 + step, 5, "#318b59");
+    rounded(3, 5, 13, 20 - step, 5, "#318b59");
+    ellipse(-2, 0, 29, 21, "#55bb72");
+    ellipse(2, 7, 16, 10, "#93d68a");
+    rounded(12, -28, 23, 31, 10, "#55bb72");
+    rounded(13, -34, 34, 25, 10, "#55bb72");
+    ellipse(37, -20, 13, 10, "#55bb72");
+    ellipse(30, -27, 5, 5, "#fffdf0");
+    ellipse(32, -27, 2.2, 2.5, "#263e31");
+    ellipse(43, -22, 1.5, 1.5, "#30774d");
+    ctx.strokeStyle = "#30774d"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(32, -15); ctx.quadraticCurveTo(38, -12, 44, -15); ctx.stroke();
+    ctx.strokeStyle = "#318b59"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(15, -3); ctx.lineTo(23, 3); ctx.lineTo(28, 0); ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
+    if (p.ouch > 0 || keys.Enter) {
+      const message = p.ouch > 0 ? "OUCH!" : "RAWR!";
+      const bubbleX = clamp(p.x, 55, W - 55);
+      const bubbleY = p.y - 68;
+      rounded(bubbleX - 42, bubbleY - 17, 84, 30, 12, "#fffdf2");
+      text(message, bubbleX, bubbleY - 2, 16, p.ouch > 0 ? "#e75040" : "#348455", "center");
+    }
+  }
+
+  function draw() {
+    const scale = Math.min(canvas.width / W, canvas.height / H);
+    const ox = (canvas.width - W * scale) / 2;
+    const oy = (canvas.height - H * scale) / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#274e39";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, ox, oy);
+
+    background();
+    cupcakes.forEach(drawCupcake);
+    lava.forEach(drawLava);
+    drawRexy();
+
+    rounded(16, 14, 928, 68, 18, "rgba(32,78,53,.84)");
+    text("REXY'S CUPCAKE CHASE", 32, 37, 21, "#fff9df");
+    text("SCORE  " + score, 32, 62, 15, "#d9f4c9");
+    text("LIVES", 745, 48, 15, "#e3f6d8");
+    for (let i = 0; i < 3; i++) heart(822 + i * 35, 51, i < lives);
+
+    rounded(230, 559, 500, 29, 12, "rgba(35,85,52,.75)");
+    text("ARROWS move  •  ENTER roar / restart  •  Catch cupcakes, dodge lava!", 480, 574, 13, "#fffde8", "center");
+
+    if (over) {
+      ctx.fillStyle = "rgba(24,48,34,.72)";
+      ctx.fillRect(0, 0, W, H);
+      rounded(270, 185, 420, 225, 25, "#fff8df");
+      text("OUCH!", 480, 230, 39, "#e85b45", "center");
+      text("Rexy's out of hearts!", 480, 274, 22, "#315c42", "center");
+      text("Cupcake score: " + score, 480, 310, 19, "#527f56", "center");
+      rounded(350, 342, 260, 42, 14, "#56ad6c");
+      text("Press ENTER to play again", 480, 363, 16, "#ffffff", "center");
+    }
+  }
+
+  function frame(timestamp) {
+    if (lastTime === null) lastTime = timestamp;
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.04);
+    lastTime = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

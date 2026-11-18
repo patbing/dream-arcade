@@ -1,10 +1,10 @@
 /* Dream Arcade: the playtest judge. Pure functions, no DOM, no network. Browser (window.DA.judge) and node (require).
  * The bot plays every game with the same seed and a fake clock, so two runs differ only by the keys pressed.
- * Verdicts come from screen samples (a 16x9 brightness grid of the canvas) and errors, not from what the game says about itself. */
+ * Verdicts come from screen samples (a 32x18 brightness grid of the canvas) and errors, not from what the game says about itself. */
 (function (root) {
   'use strict';
 
-  var SAMPLE_MS = 250, IDLE_MS = 60000, KEY_AT = 1000, KEY_HOLD = 1500, MONKEY_MS = 30000;
+  var SAMPLE_MS = 250, FINE_MS = 50, IDLE_MS = 60000, KEY_AT = 1000, KEY_HOLD = 1500, MONKEY_MS = 30000;
   // Same seed and fake clock: with no key pressed two runs draw identical frames, so any cell that differs was changed
   // by the key. DIFF is the largest per-cell brightness change (0-255) that still counts as rounding noise, plus one.
   var DIFF = 3;
@@ -26,7 +26,9 @@
       if (k && k.length === 1) k = k === ' ' ? ' ' : k.toLowerCase();
       if (!k || !code(k) || seen[k] || out.length >= 8) { dropped++; return; }
       seen[k] = 1;
-      out.push({ key: k, does: String((c && c.does) || '').slice(0, 80) });
+      var does = String((c && c.does) || '').slice(0, 80);
+      // A restart key does nothing until game over, so the bot does not hold it.
+      out.push({ key: k, does: does, restart: /restart|play again|new game|start over|reset/i.test(does) || undefined });
     });
     return { list: out, dropped: dropped };
   }
@@ -35,12 +37,14 @@
   function plans(ctrl, rand) {
     var runs = [{ name: 'idle', ms: IDLE_MS, events: [] }];
     ctrl.forEach(function (c) {
+      if (c.restart) return;
       runs.push({ name: 'key:' + c.key, key: c.key, ms: KEY_AT + KEY_HOLD + 500, events: [{ t: KEY_AT, type: 'down', key: c.key }, { t: KEY_AT + KEY_HOLD, type: 'up', key: c.key }] });
     });
     if (ctrl.length) { // a monkey: random holds of the declared keys, reproducible from rand
       var ev = [], t = 500, r = rand || Math.random;
       while (t < MONKEY_MS - 600) {
-        var k = ctrl[Math.floor(r() * ctrl.length)].key, hold = 100 + Math.floor(r() * 500);
+        var play = ctrl.filter(function (c) { return !c.restart; }); if (!play.length) play = ctrl;
+        var k = play[Math.floor(r() * play.length)].key, hold = 100 + Math.floor(r() * 500);
         ev.push({ t: t, type: 'down', key: k }, { t: t + hold, type: 'up', key: k });
         t += hold + 50 + Math.floor(r() * 300);
       }
@@ -49,7 +53,7 @@
     return runs;
   }
 
-  function diff(a, b) { // the largest change in any one cell of the 16x9 brightness grid
+  function diff(a, b) { // the largest change in any one cell of the 32x18 brightness grid
     if (!a || !b || a.length !== b.length) return Infinity;
     var m = 0; for (var i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i] - b[i]));
     return m;
@@ -60,16 +64,16 @@
     return null;
   }
 
-  // results: { [name]: { errors: [], samples: [{ t, sig: [144 numbers], state }], canvas: bool, loadError } }
+  // results: { [name]: { errors: [], samples: [{ t, sig: [576 numbers, a 32x18 brightness grid], state }], canvas: bool, loadError } }
   function verdict(ctrl, results) {
     var idle = results.idle || {}, checks = [], errors = [];
     Object.keys(results).forEach(function (n) { (results[n].errors || []).forEach(function (e) { if (errors.indexOf(e) < 0) errors.push(e); }); });
     checks.push({ id: 'runs', ok: !errors.length && !idle.loadError, label: 'Runs without errors', detail: errors.length ? errors.slice(0, 3).join(' | ') : (idle.loadError || '') });
     checks.push({ id: 'canvas', ok: !!idle.canvas, label: 'Draws on a canvas', detail: idle.canvas ? '' : 'no canvas with pixels to watch' });
     var s = idle.samples || [], moving = 0;
-    for (var i = 1; i < s.length; i++) if (diff(s[i].sig, s[i - 1].sig) >= DIFF) moving++;
-    checks.push({ id: 'alive', ok: moving >= 3, label: 'Screen moves on its own', detail: moving + ' of ' + Math.max(0, s.length - 1) + ' samples changed with no keys pressed' });
-    var keys = ctrl.map(function (c) {
+    for (var i = 1; i < s.length; i++) if (s[i].sig && s[i - 1].sig && diff(s[i].sig, s[i - 1].sig) >= DIFF) moving++; // no picture is not movement
+    checks.push({ id: 'alive', ok: moving >= 3, soft: true, label: 'Screen moves on its own', detail: moving + ' of ' + Math.max(0, s.length - 1) + ' samples changed with no keys pressed' });
+    var keys = ctrl.filter(function (c) { return !c.restart; }).map(function (c) {
       var run = results['key:' + c.key] || {}, best = 0;
       (run.samples || []).forEach(function (x) { if (x.t > KEY_AT) best = Math.max(best, diff(x.sig, (at(idle, x.t) || {}).sig)); });
       return { key: c.key, does: c.does, ok: best >= DIFF && best !== Infinity, change: best === Infinity ? null : Math.round(best * 10) / 10 };
@@ -107,7 +111,7 @@
     return lines.join('\n');
   }
 
-  var api = { SAMPLE_MS: SAMPLE_MS, IDLE_MS: IDLE_MS, KEY_AT: KEY_AT, DIFF: DIFF, code: code, controls: controls, plans: plans, diff: diff,
+  var api = { SAMPLE_MS: SAMPLE_MS, FINE_MS: FINE_MS, KEY_HOLD: KEY_HOLD, IDLE_MS: IDLE_MS, KEY_AT: KEY_AT, DIFF: DIFF, code: code, controls: controls, plans: plans, diff: diff,
     verdict: verdict, regressions: regressions, repairNote: repairNote, keyName: name };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else { root.DA = root.DA || {}; root.DA.judge = api; }

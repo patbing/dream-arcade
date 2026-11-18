@@ -1,0 +1,210 @@
+{
+ "spent": 0.19281854999999998,
+ "calls": [
+  {
+   "tag": "ds2",
+   "model": "deepseek/deepseek-v4.1-flash",
+   "usage": {
+    "prompt_tokens": 484,
+    "completion_tokens": 9404,
+    "total_tokens": 9888,
+    "reasoning_tokens": 3719,
+    "audio_prompt_tokens": 0
+   },
+   "cost": 0.005715,
+   "finish": "stop",
+   "ms": 119209,
+   "file": "ds2.html",
+   "chars": 14631
+  },
+  {
+   "tag": "ds3",
+   "model": "deepseek/deepseek-v4.1-flash",
+   "usage": {
+    "prompt_tokens": 482,
+    "completion_tokens": 9890,
+    "total_tokens": 10372,
+    "reasoning_tokens": 5007,
+    "audio_prompt_tokens": 0
+   },
+   "cost": 0.0060063,
+   "finish": "stop",
+   "ms": 158196,
+   "file": "ds3.html",
+   "chars": 13060
+  },
+  {
+   "tag": "terra1",
+   "model": "openai/gpt-6.1-terra",
+   "usage": {
+    "prompt_tokens": 461,
+    "completion_tokens": 4757,
+    "total_tokens": 5218,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "image_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 915,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
+   },
+   "cost": 0.0181845,
+   "finish": "stop",
+   "ms": 39115,
+   "file": "terra1.html",
+   "chars": 11303
+  },
+  {
+   "tag": "terra2",
+   "model": "openai/gpt-6.1-terra",
+   "usage": {
+    "prompt_tokens": 460,
+    "completion_tokens": 4070,
+    "total_tokens": 4530,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "image_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 421,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
+   },
+   "cost": 0.0156075,
+   "finish": "stop",
+   "ms": 31172,
+   "file": "terra2.html",
+   "chars": 10380
+  },
+  {
+   "tag": "terra3",
+   "model": "openai/gpt-6.1-terra",
+   "usage": {
+    "prompt_tokens": 462,
+    "completion_tokens": 4672,
+    "total_tokens": 5134,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "image_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 686,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
+   },
+   "cost": 0.0178665,
+   "finish": "stop",
+   "ms": 35268,
+   "file": "terra3.html",
+   "chars": 11574
+  },
+  {
+   "tag": "terra4",
+   "model": "openai/gpt-6.1-terra",
+   "error": "HTTPError 503 Detached generation failed",
+   "cost": 0.06064050000000001,
+   "ms": 40177,
+   "file": null,
+   "chars": 0
+  },
+  {
+   "tag": "terra5",
+   "model": "openai/gpt-6.1-terra",
+   "usage": {
+    "prompt_tokens": 485,
+    "completion_tokens": 4873,
+    "total_tokens": 5358,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "image_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 870,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
+   },
+   "cost": 0.0186375,
+   "finish": "stop",
+   "ms": 42349,
+   "file": "terra5.html",
+   "chars": 11567
+  },
+  {
+   "tag": "ds4",
+   "model": "deepseek/deepseek-v4.1-flash",
+   "usage": {
+    "prompt_tokens": 506,
+    "completion_tokens": 16000,
+    "total_tokens": 16506,
+    "reasoning_tokens": 10646,
+    "audio_prompt_tokens": 0
+   },
+   "cost": 0.0096759,
+   "finish": "length",
+   "ms": 265011,
+   "file": null,
+   "chars": 0
+  },
+  {
+   "tag": "ds5",
+   "model": "deepseek/deepseek-v4.1-flash",
+   "error": "RemoteDisconnected  ",
+   "cost": 0.0097284,
+   "ms": 270122,
+   "file": null,
+   "chars": 0
+  },
+  {
+   "tag": "ds1",
+   "model": "deepseek/deepseek-v4.1-flash",
+   "error": "RemoteDisconnected  ",
+   "cost": 0.009724199999999999,
+   "ms": 270316,
+   "file": null,
+   "chars": 0
+  },
+  {
+   "tag": "terra4",
+   "model": "openai/gpt-6.1-terra",
+   "usage": {
+    "prompt_tokens": 483,
+    "completion_tokens": 5512,
+    "total_tokens": 5995,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "image_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 964,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
+   },
+   "cost": 0.021032250000000002,
+   "finish": "stop",
+   "ms": 43505,
+   "file": "terra4.html",
+   "chars": 12507
+  }
+ ]
+}

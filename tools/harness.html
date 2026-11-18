@@ -4,12 +4,16 @@
 <script src="../js/harness.js"></script>
 <script>
 (async () => {
+  // ?dir=../pilot/&games=ds1,terra1 judges other games; default is the four handwritten ones
+  const q = new URLSearchParams(location.search), dir = q.get('dir') || '../tests/games/';
   const out = {}, t0 = performance.now();
-  for (const g of ['good', 'deadkey', 'liar', 'crash']) {
-    const html = await (await fetch('../tests/games/' + g + '.html')).text();
+  for (const g of (q.get('games') || 'good,deadkey,liar,crash').split(',')) {
+    const res = await fetch(dir + g + '.html');
+    if (!res.ok) { out[g] = { missing: true }; continue; }
+    const html = await res.text();
     const r = await DA.harness.playtest(html, 12345);
     out[g] = { playable: r.verdict.playable, passed: r.verdict.passed + '/' + r.verdict.of,
-      checks: r.verdict.checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.id + (c.detail ? ' — ' + c.detail : '')), keys: r.verdict.keys };
+      checks: r.verdict.checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.id + (c.detail ? ' — ' + c.detail : '')), keys: r.verdict.keys, note: DA.judge.repairNote(r.verdict), controls: r.controls.list };
   }
   out.ms = Math.round(performance.now() - t0);
   document.getElementById('out').textContent = JSON.stringify(out, null, 1);

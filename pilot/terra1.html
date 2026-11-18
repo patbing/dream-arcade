@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fox and the Floating Stars</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #83d7ed; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = 960, H = 540;
+  const keys = Object.create(null);
+  let islands, stars, player, score, lives, over, camera, time, particles;
+  let lastFrame = 0;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function addIsland(x, y, width, withStars = true) {
+    const island = { x, y, width };
+    islands.push(island);
+    if (withStars) {
+      stars.push({ x: x + width * 0.5, y: y - 44, taken: false, phase: Math.random() * 6.28 });
+      if (width > 175) {
+        stars.push({ x: x + width * 0.8, y: y - 44, taken: false, phase: Math.random() * 6.28 });
+      }
+    }
+    return island;
+  }
+
+  function generate() {
+    while (islands[islands.length - 1].x < camera + W + 1000) {
+      const prev = islands[islands.length - 1];
+      const gap = 62 + Math.random() * 38;
+      const width = 140 + Math.random() * 75;
+      const y = Math.max(290, Math.min(405, prev.y + (Math.random() * 76 - 38)));
+      addIsland(prev.x + prev.width + gap, y, width);
+    }
+  }
+
+  function reset() {
+    islands = [];
+    stars = [];
+    particles = [];
+    score = 0;
+    lives = 3;
+    over = false;
+    camera = 0;
+    time = 0;
+    const start = addIsland(0, 400, 260, false);
+    stars.push({ x: 205, y: 356, taken: false, phase: 0 });
+    player = { x: 90, y: 400, vx: 0, vy: 0, grounded: true, facing: 1, checkpoint: start, blink: 0 };
+    generate();
+  }
+  reset();
+
+  window.addEventListener("keydown", e => {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    keys[e.key] = true;
+    if (e.key === "Enter" && over) reset();
+  });
+  window.addEventListener("keyup", e => {
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    keys[e.key] = false;
+  });
+  window.addEventListener("blur", () => {
+    for (const key in keys) keys[key] = false;
+  });
+
+  window.__play = {
+    controls: [
+      { key: "ArrowLeft", does: "move left" },
+      { key: "ArrowRight", does: "move right" },
+      { key: " ", does: "jump; hold to keep jumping" },
+      { key: "Enter", does: "restart after game over" }
+    ],
+    state() { return { score, lives, over, won: false }; }
+  };
+
+  function burst(x, y) {
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 35 + Math.random() * 110;
+      particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 30, life: 0.5 + Math.random() * 0.4 });
+    }
+  }
+
+  function update(dt) {
+    time += dt;
+    for (const p of particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 110 * dt;
+      p.life -= dt;
+    }
+    particles = particles.filter(p => p.life > 0);
+    if (over) return;
+
+    player.blink = Math.max(0, player.blink - dt);
+    const direction = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+    player.vx = direction * 250;
+    if (direction) player.facing = direction;
+
+    if (keys[" "] && player.grounded) {
+      player.vy = -510;
+      player.grounded = false;
+    }
+
+    const oldY = player.y;
+    player.x = Math.max(15, player.x + player.vx * dt);
+    player.vy += 1250 * dt;
+    player.y += player.vy * dt;
+    player.grounded = false;
+
+    if (player.vy >= 0) {
+      for (const island of islands) {
+        if (oldY <= island.y && player.y >= island.y &&
+            player.x + 13 > island.x && player.x - 13 < island.x + island.width) {
+          player.y = island.y;
+          player.vy = 0;
+          player.grounded = true;
+          player.checkpoint = island;
+          break;
+        }
+      }
+    }
+
+    for (const star of stars) {
+      if (!star.taken && Math.hypot(player.x - star.x, player.y - 20 - star.y) < 32) {
+        star.taken = true;
+        score += 10;
+        burst(star.x, star.y);
+      }
+    }
+
+    if (player.y > 550) {
+      lives--;
+      if (lives <= 0) {
+        lives = 0;
+        over = true;
+      } else {
+        player.x = player.checkpoint.x + player.checkpoint.width / 2;
+        player.y = player.checkpoint.y;
+        player.vx = 0;
+        player.vy = 0;
+        player.grounded = true;
+        player.blink = 1.5;
+        camera = Math.max(0, player.x - 300);
+      }
+    }
+
+    const target = Math.max(0, player.x - 300);
+    camera += (target - camera) * Math.min(1, dt * 5);
+    generate();
+  }
+
+  function roundedRect(x, y, w, h, r, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  }
+
+  function starShape(x, y, radius, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 ? radius * 0.45 : radius;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawBackground() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#75caea");
+    sky.addColorStop(1, "#d5f5ef");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "#fff5c4";
+    ctx.beginPath();
+    ctx.arc(810, 94, 43, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,.72)";
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 220 - camera * 0.16) % 1540 + 1540) % 1540 - 180;
+      const y = 65 + (i % 3) * 45;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 55, 15, 0, 0, Math.PI * 2);
+      ctx.ellipse(x - 20, y - 9, 25, 17, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + 15, y - 12, 30, 21, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#52b4c8";
+    ctx.fillRect(0, 495, W, 45);
+    ctx.fillStyle = "#83dbe1";
+    for (let i = 0; i < 16; i++) {
+      const x = ((i * 94 - camera * 0.3 + time * 15) % 1100 + 1100) % 1100 - 70;
+      ctx.beginPath();
+      ctx.ellipse(x, 506 + (i % 3) * 12, 28, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawIsland(island) {
+    const x = island.x - camera, y = island.y, w = island.width;
+    if (x + w < -50 || x > W + 50) return;
+    ctx.fillStyle = "#a96849";
+    ctx.beginPath();
+    ctx.moveTo(x, y + 5);
+    ctx.lineTo(x + w, y + 5);
+    ctx.lineTo(x + w - 18, y + 32);
+    ctx.lineTo(x + w * 0.68, y + 60);
+    ctx.lineTo(x + w * 0.38, y + 66);
+    ctx.lineTo(x + 16, y + 34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#824f3e";
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.38, y + 66);
+    ctx.lineTo(x + w * 0.68, y + 60);
+    ctx.lineTo(x + w - 18, y + 32);
+    ctx.lineTo(x + w * 0.55, y + 43);
+    ctx.closePath();
+    ctx.fill();
+    roundedRect(x, y - 5, w, 14, 7, "#4eae68");
+    ctx.fillStyle = "#a4e18b";
+    ctx.fillRect(x + 9, y - 5, Math.max(0, w - 18), 3);
+    ctx.fillStyle = "#dcf5a1";
+    for (let i = 25; i < w - 10; i += 55) {
+      ctx.beginPath();
+      ctx.arc(x + i, y - 8, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawFox() {
+    if (player.blink > 0 && Math.floor(player.blink * 10) % 2 === 0) return;
+    const x = player.x - camera, y = player.y;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(player.facing, 1);
+
+    // Bushy tail and white tip.
+    ctx.fillStyle = "#dc6a2d";
+    ctx.beginPath();
+    ctx.moveTo(-8, -18);
+    ctx.quadraticCurveTo(-30, -37, -35, -19);
+    ctx.quadraticCurveTo(-32, -4, -10, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#fff3db";
+    ctx.beginPath();
+    ctx.moveTo(-35, -19);
+    ctx.quadraticCurveTo(-34, -29, -27, -29);
+    ctx.lineTo(-23, -19);
+    ctx.quadraticCurveTo(-29, -16, -35, -19);
+    ctx.fill();
+
+    ctx.fillStyle = "#e98035";
+    ctx.beginPath();
+    ctx.ellipse(0, -15, 15, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#633e36";
+    ctx.fillRect(-9, -5, 6, 5);
+    ctx.fillRect(5, -5, 6, 5);
+
+    // Pointed ears, face, muzzle and eye.
+    ctx.fillStyle = "#c85828";
+    ctx.beginPath();
+    ctx.moveTo(-9, -29); ctx.lineTo(-7, -44); ctx.lineTo(1, -34);
+    ctx.moveTo(6, -33); ctx.lineTo(14, -43); ctx.lineTo(15, -27);
+    ctx.fill();
+    ctx.fillStyle = "#f59641";
+    ctx.beginPath();
+    ctx.ellipse(5, -29, 13, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff2d5";
+    ctx.beginPath();
+    ctx.ellipse(13, -25, 8, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#3c3535";
+    ctx.beginPath();
+    ctx.arc(19, -27, 2, 0, Math.PI * 2);
+    ctx.arc(9, -32, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    const sx = canvas.width / W, sy = canvas.height / H;
+    ctx.setTransform(sx, 0, 0, sy, 0, 0);
+    drawBackground();
+
+    for (const island of islands) drawIsland(island);
+    for (const star of stars) {
+      const x = star.x - camera;
+      if (!star.taken && x > -25 && x < W + 25) {
+        const y = star.y + Math.sin(time * 3 + star.phase) * 4;
+        ctx.fillStyle = "rgba(255,230,97,.25)";
+        ctx.beginPath();
+        ctx.arc(x, y, 20, 0, Math.PI * 2);
+        ctx.fill();
+        starShape(x, y, 13, "#ffd451");
+        starShape(x - 2, y - 2, 7, "#fff1a0");
+      }
+    }
+    for (const p of particles) {
+      ctx.globalAlpha = Math.min(1, p.life * 2);
+      starShape(p.x - camera, p.y, 4, "#ffe474");
+    }
+    ctx.globalAlpha = 1;
+    drawFox();
+
+    roundedRect(16, 14, 212, 54, 16, "rgba(31,83,91,.75)");
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 21px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("★ " + score, 30, 38);
+    ctx.font = "bold 15px system-ui, sans-serif";
+    ctx.fillText("LIVES  " + "♥ ".repeat(lives), 30, 58);
+
+    ctx.textAlign = "right";
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.fillStyle = "#245e69";
+    ctx.fillText("← → move   •   SPACE jump", W - 20, 32);
+    ctx.textAlign = "left";
+
+    if (over) {
+      ctx.fillStyle = "rgba(17,48,63,.7)";
+      ctx.fillRect(0, 0, W, H);
+      roundedRect(W / 2 - 190, H / 2 - 105, 380, 210, 22, "#fff8e5");
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#a94e2d";
+      ctx.font = "bold 38px system-ui, sans-serif";
+      ctx.fillText("Splash!", W / 2, H / 2 - 42);
+      ctx.fillStyle = "#365b5c";
+      ctx.font = "bold 20px system-ui, sans-serif";
+      ctx.fillText("Stars collected: " + score / 10, W / 2, H / 2 + 2);
+      ctx.font = "16px system-ui, sans-serif";
+      ctx.fillText("Press Enter to play again", W / 2, H / 2 + 46);
+      ctx.textAlign = "left";
+    }
+  }
+
+  function frame(timestamp) {
+    const dt = lastFrame ? Math.min((timestamp - lastFrame) / 1000, 0.033) : 0;
+    lastFrame = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

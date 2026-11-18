@@ -16,6 +16,13 @@ test('controls: normalizes Space and letters, drops unknown and duplicate keys, 
   assert.equal(J.controls(Array.from({ length: 12 }, (_, i) => ({ key: String.fromCharCode(97 + i) }))).list.length, 8);
 });
 
+test('controls: a restart key is not held by the bot or required to change the screen', () => {
+  const c = J.controls([{ key: 'ArrowLeft', does: 'move' }, { key: 'Enter', does: 'Restart after game over' }]).list;
+  assert.deepEqual(J.plans(c, Math.random).map(x => x.name), ['idle', 'key:ArrowLeft', 'monkey']);
+  const idle = idleRun(240);
+  assert.equal(J.verdict(c, { idle, 'key:ArrowLeft': keyRun(idle, 40) }).playable, true);
+});
+
 test('plans: idle, one hold per key, and a reproducible monkey', () => {
   const ctrl = [{ key: 'ArrowLeft' }, { key: ' ' }];
   const seeded = () => { let a = 7; return () => (a = (a * 16807) % 2147483647) / 2147483647; };
@@ -37,7 +44,7 @@ test('verdict: a working game is playable', () => {
   const idle = idleRun(240, i => ({ score: i, lives: i > 100 ? 2 : 3 }));
   const v = J.verdict([{ key: 'ArrowLeft', does: 'move' }], { idle, 'key:ArrowLeft': keyRun(idle, 40) });
   assert.equal(v.playable, true);
-  assert.equal(v.passed, 4);
+  assert.equal(v.passed, 3); // runs, canvas, keys; alive/lose/score only report
   assert.ok(v.checks.find(c => c.id === 'lose').ok);
 });
 
@@ -56,6 +63,11 @@ test('verdict: self-reported state cannot make a frozen screen playable', () => 
   assert.equal(v.playable, false);
   assert.equal(v.checks.find(c => c.id === 'alive').ok, false);
   assert.equal(v.checks.find(c => c.id === 'score').ok, true); // soft checks only report
+});
+
+test('verdict: samples with no picture do not count as a moving screen', () => {
+  const blank = { errors: [], canvas: false, samples: Array.from({ length: 240 }, (_, i) => ({ t: i * 250, sig: null, state: null })) };
+  assert.equal(J.verdict([], { idle: blank }).checks.find(c => c.id === 'alive').ok, false);
 });
 
 test('verdict: errors and missing canvas fail; no declared keys fails', () => {
