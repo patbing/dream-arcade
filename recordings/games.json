@@ -1,0 +1,50 @@
+{
+ "note": "Five dreams written by openai/gpt-6.1-terra on 2026-11-18, one reply each, unedited. Pick one: the bot plays it in your browser, then you can.",
+ "games": [
+  {
+   "id": "g4",
+   "title": "Rexy and the runaway cupcakes (a kid's dream)",
+   "dream": "my game is a dinosaur called rexy and he eats cupcakes but the cupcakes run away from him!! and theres a volcano that shoots lava and if lava hits rexy he says OUCH and you have 3 hearts",
+   "file": "g4.html",
+   "model": "openai/gpt-6.1-terra",
+   "ms": 43505,
+   "cost": 0.02103
+  },
+  {
+   "id": "g1",
+   "title": "Fox among floating islands",
+   "dream": "A platformer where a fox jumps between floating islands collecting stars. Falling into the sea costs a life.",
+   "file": "g1.html",
+   "model": "openai/gpt-6.1-terra",
+   "ms": 39115,
+   "cost": 0.01818
+  },
+  {
+   "id": "g2",
+   "title": "Apple catcher",
+   "dream": "Catch falling apples in a basket but dodge the rotten ones. It gets faster the longer you last.",
+   "file": "g2.html",
+   "model": "openai/gpt-6.1-terra",
+   "ms": 31172,
+   "cost": 0.01561
+  },
+  {
+   "id": "g3",
+   "title": "Asteroid splitter",
+   "dream": "A space shooter: my ship at the bottom shoots asteroids, and big asteroids split into smaller ones.",
+   "file": "g3.html",
+   "model": "openai/gpt-6.1-terra",
+   "ms": 35268,
+   "cost": 0.01787
+  },
+  {
+   "id": "g5",
+   "title": "Two-player fighter",
+   "dream": "A two-player fighting game on one keyboard. Player one moves with W A S D and punches with F, player two moves with the arrow keys and punches with L. First to knock the other out 3 times wins.",
+   "file": "g5.html",
+   "model": "openai/gpt-6.1-terra",
+   "ms": 42349,
+   "cost": 0.01864
+  }
+ ]
+}

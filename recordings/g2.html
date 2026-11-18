@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple Harvest</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #263d2d; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = 800, H = 600;
+  const keys = Object.create(null);
+  let scale = 1, ox = 0, oy = 0;
+  let score, lives, over, elapsed, spawnTimer, basketX, apples, particles, messages, flash;
+  let lastTime = 0;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    scale = Math.min(canvas.width / W, canvas.height / H);
+    ox = (canvas.width - W * scale) / 2;
+    oy = (canvas.height - H * scale) / 2;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function reset() {
+    score = 0;
+    lives = 3;
+    over = false;
+    elapsed = 0;
+    spawnTimer = 0.6;
+    basketX = W / 2;
+    apples = [];
+    particles = [];
+    messages = [];
+    flash = 0;
+  }
+  reset();
+
+  window.__play = {
+    controls: [
+      { key: "ArrowLeft", does: "move basket left" },
+      { key: "ArrowRight", does: "move basket right" },
+      { key: "Enter", does: "restart after game over" }
+    ],
+    state() { return { score, lives, over, won: false }; }
+  };
+
+  window.addEventListener("keydown", e => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) e.preventDefault();
+    keys[e.key] = true;
+    if (e.key === "Enter" && over) reset();
+  });
+  window.addEventListener("keyup", e => { keys[e.key] = false; });
+  window.addEventListener("blur", () => {
+    for (const key in keys) keys[key] = false;
+  });
+
+  function rounded(x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+  }
+
+  function text(str, x, y, size, color, align = "left", weight = "600") {
+    ctx.fillStyle = color;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(str, x, y);
+  }
+
+  function burst(x, y, color) {
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const speed = 35 + Math.random() * 120;
+      particles.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 50,
+        life: 0.5 + Math.random() * 0.5, color });
+    }
+  }
+
+  function message(x, y, label, color) {
+    messages.push({ x, y, label, color, life: 1 });
+  }
+
+  function loseLife(x, y, label) {
+    lives--;
+    flash = 0.35;
+    message(x, y, label, "#ffebba");
+    burst(x, y, "#e68553");
+    if (lives <= 0) {
+      lives = 0;
+      over = true;
+    }
+  }
+
+  function spawnApple() {
+    const rotten = Math.random() < Math.min(0.38, 0.22 + elapsed / 400);
+    apples.push({
+      x: 38 + Math.random() * (W - 76),
+      y: -25,
+      r: 20,
+      rotten,
+      speed: 125 + Math.min(elapsed * 2.4, 220) + Math.random() * 35,
+      wobble: Math.random() * 6.28
+    });
+  }
+
+  function update(dt) {
+    if (over) return;
+    elapsed += dt;
+    if (keys.ArrowLeft) basketX -= 390 * dt;
+    if (keys.ArrowRight) basketX += 390 * dt;
+    basketX = Math.max(58, Math.min(W - 58, basketX));
+
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnApple();
+      spawnTimer = Math.max(0.42, 1.15 - elapsed * 0.008) * (0.85 + Math.random() * 0.3);
+    }
+
+    for (let i = apples.length - 1; i >= 0; i--) {
+      const a = apples[i];
+      const oldY = a.y;
+      a.y += a.speed * dt;
+      a.wobble += dt * 3;
+      if (oldY + a.r < 520 && a.y + a.r >= 520 && Math.abs(a.x - basketX) < 52 + a.r * 0.6) {
+        apples.splice(i, 1);
+        if (a.rotten) {
+          loseLife(a.x, 510, "ROTTEN! −1 LIFE");
+        } else {
+          score += 10;
+          message(a.x, 500, "+10", "#fff6b0");
+          burst(a.x, 510, "#ffcc55");
+        }
+      } else if (a.y - a.r > 570) {
+        apples.splice(i, 1);
+        if (!a.rotten) loseLife(a.x, 550, "MISSED! −1 LIFE");
+        else burst(a.x, 560, "#798347");
+      }
+      if (over) break;
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 180 * dt;
+      p.life -= dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = messages.length - 1; i >= 0; i--) {
+      messages[i].y -= 30 * dt;
+      messages[i].life -= dt;
+      if (messages[i].life <= 0) messages.splice(i, 1);
+    }
+    flash = Math.max(0, flash - dt);
+  }
+
+  function tree(x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#886548";
+    ctx.fillRect(-12, 0, 24, 100);
+    ctx.fillStyle = "#79a35b";
+    for (const [cx, cy, r] of [[-40,-10,46],[5,-35,55],[48,-8,45],[0,5,50]]) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#9bc878";
+    ctx.beginPath(); ctx.arc(-18, -38, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawApple(a) {
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(Math.sin(a.wobble) * 0.08);
+    ctx.strokeStyle = "#624122";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(3, -26); ctx.stroke();
+    ctx.fillStyle = a.rotten ? "#65773d" : "#5a9a45";
+    ctx.beginPath(); ctx.ellipse(10, -24, 10, 5, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = a.rotten ? "#8a8744" : "#e94d3d";
+    ctx.beginPath();
+    ctx.moveTo(0, -15);
+    ctx.bezierCurveTo(-25, -26, -27, 2, -14, 16);
+    ctx.quadraticCurveTo(-7, 23, 0, 19);
+    ctx.quadraticCurveTo(7, 23, 14, 16);
+    ctx.bezierCurveTo(27, 2, 25, -26, 0, -15);
+    ctx.fill();
+    if (a.rotten) {
+      ctx.fillStyle = "#514c34";
+      for (const [x,y,r] of [[-8,-3,5],[8,6,6],[6,-11,3]]) {
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      }
+      ctx.strokeStyle = "#514c34";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-14, 9); ctx.lineTo(-8, 13); ctx.lineTo(-4, 10); ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,.35)";
+      ctx.beginPath(); ctx.ellipse(-10, -7, 4, 8, 0.45, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBasket() {
+    ctx.save();
+    ctx.translate(basketX, 520);
+    ctx.fillStyle = "rgba(46,57,28,.2)";
+    ctx.beginPath(); ctx.ellipse(0, 53, 65, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#aa6634";
+    ctx.beginPath(); ctx.moveTo(-53, 0); ctx.lineTo(53, 0); ctx.lineTo(42, 45);
+    ctx.quadraticCurveTo(0, 53, -42, 45); ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = "#cf9150"; ctx.lineWidth = 4;
+    for (let y = 10; y < 55; y += 13) {
+      ctx.beginPath(); ctx.moveTo(-60, y); ctx.lineTo(60, y); ctx.stroke();
+    }
+    ctx.strokeStyle = "#8c512e"; ctx.lineWidth = 3;
+    for (let x = -45; x <= 45; x += 15) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x * 0.8, 50); ctx.stroke();
+    }
+    ctx.restore();
+    rounded(-59, -7, 118, 13, 6, "#794522");
+    rounded(-55, -6, 110, 5, 3, "#dba05c");
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#263d2d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, ox, oy);
+
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#cce9df");
+    sky.addColorStop(1, "#f9e9b3");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,.55)";
+    for (const [x,y] of [[140,150],[500,130],[690,200]]) {
+      ctx.beginPath(); ctx.ellipse(x,y,45,12,0,0,Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = "#aac994";
+    ctx.beginPath(); ctx.moveTo(0, 400); ctx.quadraticCurveTo(200, 320, 400, 410);
+    ctx.quadraticCurveTo(610, 325, 800, 400); ctx.lineTo(800,600); ctx.lineTo(0,600); ctx.fill();
+    tree(75, 380, 1.1); tree(270, 410, 0.8); tree(550, 400, 0.9); tree(730, 375, 1.1);
+    ctx.fillStyle = "#8ab36b"; ctx.fillRect(0, 545, W, 55);
+    ctx.fillStyle = "#739d58"; ctx.fillRect(0, 580, W, 20);
+
+    for (const a of apples) drawApple(a);
+    drawBasket();
+    for (const p of particles) {
+      ctx.globalAlpha = Math.min(1, p.life * 2);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const m of messages) {
+      ctx.globalAlpha = Math.min(1, m.life * 3);
+      text(m.label, m.x, m.y, 16, m.color, "center", "800");
+    }
+    ctx.globalAlpha = 1;
+
+    rounded(18, 16, 210, 64, 16, "rgba(36,67,47,.88)");
+    text("HARVEST", 34, 35, 12, "#c7e4b7", "left", "800");
+    text("Score  " + score, 34, 59, 22, "#ffffff", "left", "800");
+    rounded(572, 16, 210, 64, 16, "rgba(36,67,47,.88)");
+    text("LIVES", 588, 35, 12, "#c7e4b7", "left", "800");
+    text("♥ ".repeat(lives) + "♡ ".repeat(3 - lives), 588, 60, 23, "#ffb2a1", "left", "800");
+    rounded(243, 19, 314, 32, 16, "rgba(255,255,255,.68)");
+    text("←  →  Move  •  Catch red, dodge rotten", 400, 35, 13, "#355b3b", "center", "700");
+    text("The harvest gets faster!", 400, 72, 13, "#527658", "center", "700");
+
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(207,55,37,${flash * 0.45})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (over) {
+      ctx.fillStyle = "rgba(23,40,29,.7)";
+      ctx.fillRect(0, 0, W, H);
+      rounded(220, 190, 360, 220, 24, "#fff5d8");
+      text("Harvest over!", 400, 242, 36, "#355b3b", "center", "800");
+      text("Final score: " + score, 400, 292, 24, "#99532f", "center", "700");
+      text("Press Enter to play again", 400, 355, 17, "#527658", "center", "700");
+    }
+  }
+
+  function frame(timestamp) {
+    const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 0;
+    lastTime = timestamp;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

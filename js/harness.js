@@ -13,7 +13,13 @@
     function report(msg) { var m = String(msg || 'error').slice(0, 160); if (errors.length < 20) errors.push(m); }
     window.addEventListener('error', function (e) { report(e.message); });
     window.addEventListener('unhandledrejection', function (e) { report('unhandled promise: ' + (e.reason && e.reason.message || e.reason)); });
-    if (!cfg.plan) {
+    if (!cfg.plan) { // the visitor plays: on-screen buttons in the page send keys here, only from the parent and with the token
+      window.addEventListener('message', function (e) {
+        var d = e.data;
+        if (e.source !== parent || !d || d.token !== token || (d.type !== 'keydown' && d.type !== 'keyup') || typeof d.key !== 'string') return;
+        var t = document.activeElement || document.body || document.documentElement;
+        t.dispatchEvent(new KeyboardEvent(d.type, { key: d.key, code: String(d.code || ''), bubbles: true, cancelable: true }));
+      });
       setTimeout(function () { parent.postMessage({ token: token, errors: errors, ready: true }, '*'); }, 1500);
       return;
     }
@@ -90,13 +96,32 @@
     var setTimeoutReal = window.__realSetTimeout;
   }
 
-  function srcdoc(gameHtml, cfg) {
-    var head = '<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + CSP + '">' +
+  function head(cfg) {
+    return '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + CSP + '">' +
       '<script>window.__realSetTimeout = setTimeout.bind(window);(' + prelude.toString() + ')(' + JSON.stringify(cfg) + ');<\/script>';
-    var html = String(gameHtml || '');
-    // The prelude must run before any game script: put it right after <head>, or first if there is none.
-    if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, function (m) { return m + head; });
-    return '<!doctype html><html><head>' + head + '</head><body>' + html + '</body></html>';
+  }
+  // The CSP and the prelude always go first, so no trick in the game's markup (a <head> inside a comment, say) can skip them.
+  // The game's own doctype comes later and is ignored; ours keeps standards mode.
+  function srcdoc(gameHtml, cfg) { return head(cfg) + String(gameHtml || ''); }
+
+  // A downloaded game keeps the no-network policy when opened from disk.
+  function forDownload(gameHtml) {
+    return '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + CSP + '">\n' + String(gameHtml || '');
+  }
+
+  // The visible game: sandboxed like the bot runs, sized by its box. Returns { frame, press(type, key), remove() }.
+  function play(box, gameHtml) {
+    var token = Math.random().toString(36).slice(2), f = document.createElement('iframe');
+    f.setAttribute('sandbox', 'allow-scripts');
+    f.setAttribute('title', 'The game');
+    f.className = 'gameframe';
+    f.srcdoc = srcdoc(gameHtml, { token: token, plan: null });
+    box.appendChild(f);
+    return {
+      frame: f,
+      press: function (type, key) { if (f.contentWindow) f.contentWindow.postMessage({ token: token, type: type, key: key, code: root.DA.judge.code(key) }, '*'); },
+      remove: function () { f.remove(); }
+    };
   }
 
   // Runs one plan; resolves to the frame's report or { loadError }.
@@ -151,5 +176,5 @@
   function mulberry(a) { return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
   root.DA = root.DA || {};
-  root.DA.harness = { CSP: CSP, srcdoc: srcdoc, runPlan: runPlan, playtest: playtest };
+  root.DA.harness = { CSP: CSP, srcdoc: srcdoc, forDownload: forDownload, play: play, runPlan: runPlan, playtest: playtest };
 })(window);

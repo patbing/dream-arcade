@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dream Arcade · describe a game, a bot plays it, then you do</title>
+<meta name="description" content="Describe the game you dream of. A model writes it, a bot plays it in your browser and reports dead keys and crashes, then you play it and share it.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="css/style.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@pollinations/ui@0.1.0-alpha.31/dist/connect.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Dream Arcade</h1>
+    <p>Describe the game you dream of. A model writes it, a bot plays it in your browser and checks every key, then you play it and share it.</p>
+  </div>
+  <div class="topright">
+    <span id="spent" class="spent" hidden></span>
+    <polli-connect id="connect" app-key="pk_0LE1zSCRF2udEk3U" budget="1" expiry="7"></polli-connect>
+    <span id="connect-fallback" class="hint" hidden>Sign-in unavailable. The recorded games still work.</span>
+    <a class="made" href="https://pollinations.ai/?ref=badge" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/pollinations/pollinations/main/packages/ui/src/brand/badge-made-with.svg" alt="Made with pollinations.ai" height="28"></a>
+  </div>
+</header>
+
+<main>
+  <p id="notice" class="notice" role="status" aria-live="polite"></p>
+
+  <section id="shared" class="panel" aria-label="Shared game" hidden>
+    <h2>A game someone shared with you</h2>
+    <div id="sharedresult" class="result"></div>
+  </section>
+
+  <section class="panel" aria-label="Recorded games">
+    <h2>Recorded games: try it without signing in</h2>
+    <p id="recmeta" class="fine"></p>
+    <div id="shots" class="takes"></div>
+    <div id="recresult" class="result"></div>
+  </section>
+
+  <section class="panel" aria-label="Your game">
+    <h2>Your dream game</h2>
+    <p id="signin" class="hint">Sign in with Pollinations to make a game. You pay with your own Pollen; the default model is free-tier.</p>
+    <label class="field" for="dream">What is the game? Who do you play, what do you do, what gets you?</label>
+    <textarea id="dream" rows="4" placeholder="A cat in a spaceship collects fish between the stars. Comets cost a life. Space shoots fish lasers."></textarea>
+    <div class="controls">
+      <button id="make" class="btn primary" type="button" disabled>Make my game</button>
+      <button id="cancel" class="btn" type="button" hidden>Cancel</button>
+      <span class="fine">Model: <code id="model"></code></span>
+    </div>
+    <p id="cost" class="fine"></p>
+    <div id="liveresult" class="result" aria-live="polite"></div>
+  </section>
+
+  <section class="panel about" aria-label="How it works">
+    <h2>How it works</h2>
+    <div class="cols3">
+      <div><h3>The model writes the game</h3><p><code>openai/gpt-6.1-terra</code> turns your words into one HTML game with a canvas, keys and a score. It also lists its keys and what each one does.</p></div>
+      <div><h3>A bot plays it first</h3><p>In a sandbox with no network, a bot plays a minute with no keys, holds each key, then mashes random keys, all on a fake clock with a fixed seed. It compares the pictures: a key that changes nothing is a dead key.</p></div>
+      <div><h3>Problems go back to the model</h3><p>If the bot finds a crash or a dead key, its findings go back to the model once for a fix. When you ask for a change later, the bot checks that nothing that worked before broke.</p></div>
+    </div>
+    <p class="fine">Like the uncle in "Fable 5.2 one-shotted my nephew's dream game", who had the model write a bot to play every stage and check the screenshots. Here the bot is ordinary code, so its verdict does not depend on the model that wrote the game.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Games run in a sandboxed frame with no network and no access to this page or your key. You pay with your own Pollen through Pollinations Connect, which keeps your key in this tab's sessionStorage. Share links carry the whole game in the link; nothing is stored on a server. <a id="src" href="#">Source</a></p>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/dream.js"></script>
+<script src="js/judge.js"></script>
+<script src="js/harness.js"></script>
+<script src="js/net.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -88,7 +88,7 @@
     var scored = mk.some(function (x) { return num(x.score) && num(first.score) && x.score > first.score; }) || st.some(function (x) { return num(x.score) && num(first.score) && x.score > first.score; });
     checks.push({ id: 'score', ok: !!scored, soft: true, label: 'Score goes up while playing (self-reported)', detail: scored ? '' : 'score never rose in 30 s of random keys' });
     var hard = checks.filter(function (c) { return !c.soft; });
-    return { checks: checks, keys: keys, passed: hard.filter(function (c) { return c.ok; }).length, of: hard.length, playable: hard.every(function (c) { return c.ok; }) };
+    return { checks: checks, keys: keys, controls: ctrl, passed: hard.filter(function (c) { return c.ok; }).length, of: hard.length, playable: hard.every(function (c) { return c.ok; }) };
   }
   function num(x) { return typeof x === 'number' && isFinite(x); }
   function name(k) { return k === ' ' ? 'Space' : k; }
